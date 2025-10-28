@@ -1,0 +1,101 @@
+2025-07-27 19:28:31 - Cow 1: Eating
+Cow 2: Eating
+Cow 3: Eating
+Cow 4: Eating
+Cow 5: Eating
+Cow 6: Eating
+
+2025-07-27 19:28:41 - Cow 1: Eating
+Cow 2: Eating
+Cow 3: Eating
+Cow 4: Eating
+Cow 5: Eating
+Cow 6: Eating
+Cow 7: Eating
+
+2025-07-27 19:28:51 - Cow 1: eating
+Cow 2: eating
+Cow 3: eating
+Cow 4: eating
+Cow 5: eating
+Cow 6: eating
+
+2025-07-27 19:29:01 - Cow 1: eating
+Cow 2: eating
+Cow 3: eating
+Cow 4: eating
+
+2025-07-27 19:29:11 - Cow 1: Eating
+Cow 2: Eating
+Cow 3: Eating
+
+2025-07-27 19:33:13 - There are no cows in the image.
+
+2025-07-27 19:33:17 - There are no cows.
+
+2025-07-27 19:33:21 - There are no cows in the image.
+
+2025-07-27 19:33:26 - There are no cows in the image.
+
+2025-07-27 19:33:29 - There are no cows in the image.
+
+2025-07-27 19:33:34 - There are no cows in the image.
+
+2025-07-27 19:33:38 - There are no cows in the image.
+
+2025-07-27 19:33:41 - There are no cows in the image.
+
+2025-07-27 19:33:45 - There are no cows.
+
+2025-07-27 19:33:49 - There are no cows in the image.
+
+2025-07-27 19:33:53 - There are no cows in the image.
+
+2025-07-27 19:33:58 - There are no cows in the image.
+
+2025-07-27 19:34:02 - There are no cows.
+
+2025-07-27 19:34:05 - There are no cows in the image.
+
+2025-07-27 19:34:09 - There are no cows.
+
+2025-07-27 19:34:13 - There are no cows.
+
+2025-07-27 19:34:17 - There are no cows.
+
+2025-07-27 19:34:21 - No cows detected.
+
+2025-07-27 19:34:25 - There are no cows.
+
+2025-07-27 19:34:30 - There are no cows.
+
+2025-07-27 19:34:34 - There are no cows.
+
+2025-07-27 19:34:38 - There are no cows in the image.
+
+2025-07-27 19:34:42 - There are no cows in the image.
+
+2025-07-27 19:34:46 - No cows detected.
+
+2025-07-27 19:34:51 - One cow is visible; it is not eating.
+
+2025-07-27 19:34:55 - Cow 1: Eating.
+
+2025-07-27 19:35:00 - There is one cow visible.  It is not possible to determine if it is eating.
+
+2025-07-27 19:35:04 - There is one cow in the image. It is not eating.
+
+2025-07-27 19:35:08 - There is one cow visible; it is not eating.
+
+2025-07-27 19:35:12 - The cow in the image is eating.
+
+2025-07-27 19:35:16 - There are no cows in the image.
+
+2025-07-27 19:35:20 - There are no cows in the image.
+
+2025-07-27 19:35:24 - There are no cows in the image.
+
+2025-07-27 19:35:29 - There are no cows.
+
+2025-07-31 11:02:05 - There are no cows.
+
