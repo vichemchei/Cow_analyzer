@@ -5,13 +5,27 @@ import time
 import json
 from datetime import datetime
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import AzureChatOpenAI
+from dotenv import load_dotenv
 
-# ✅ Set up Google API Key
-os.environ["GOOGLE_API_KEY"] = "AIzaSyDA9-0foCmBqWltPb8r3fOWoyI7iQLIhDc"
+load_dotenv()
 
-# ✅ Initialize the Gemini model
-model = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
+# ✅ Set up Azure OpenAI Configuration
+api_key = os.getenv("AZURE_OPENAI_API_KEY")
+endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+chat_deployment = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME")
+
+if not api_key or not endpoint or not chat_deployment:
+    raise ValueError("Azure OpenAI credentials missing. Please set AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, and AZURE_OPENAI_CHAT_DEPLOYMENT_NAME in .env file.")
+
+# ✅ Initialize the Azure OpenAI model
+model = AzureChatOpenAI(
+    openai_api_version="2024-02-15-preview",
+    azure_endpoint=endpoint,
+    openai_api_key=api_key,
+    deployment_name=chat_deployment,
+    temperature=0.7
+)
 
 # Shared data file for communication between processes
 SHARED_DATA_FILE = "cow_analysis_data.json"

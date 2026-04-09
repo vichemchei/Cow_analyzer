@@ -1,11 +1,17 @@
 from __future__ import print_function
 import africastalking
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class SMS:
     def __init__(self):
-        self.username = "sandbox"
-        self.api_key = "atsk_c476b74ddda6a1e9566cb6ebaf83cdb47396a4e7c0af1c5d88de9e1c0144807ee1b5e4d6"
+        self.username = os.getenv("AFRICAS_TALKING_USERNAME", "sandbox")
+        self.api_key = os.getenv("AFRICAS_TALKING_API_KEY")
+        
+        if not self.api_key:
+            raise ValueError("AFRICAS_TALKING_API_KEY environment variable is required. Please set it in .env file.")
 
         africastalking.initialize(self.username, self.api_key)
 

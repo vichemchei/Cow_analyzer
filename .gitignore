@@ -1,0 +1,83 @@
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# OS
+.DS_Store
+Thumbs.db
+.env.swp
+
+# Data & Logs (Gitignored - generated files)
+analysis_log.txt
+chat_log.txt
+gemini_responses.txt
+response_cache.json
+current_frame.jpg
+cow_analysis_data.json
+data/
+
+# Media Files (Large)
+*.mp4
+*.avi
+*.mov
+*.webm
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor backups
+*.orig
+*.bak
+
+# Random generated files
+.cache/
+temp/
+tmp/

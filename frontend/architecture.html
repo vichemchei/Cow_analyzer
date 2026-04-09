@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>HerdWatch Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  body { margin:0; background:#0f1110; font-family:'DM Mono',monospace; display:flex; flex-direction:column; align-items:center; padding:3rem 2rem; }
+  h1 { font-family:'Syne',sans-serif; color:#dde8e0; font-size:1.3rem; font-weight:700; margin-bottom:0.4rem; letter-spacing:0.02em; }
+  .subtitle { color:#5a7063; font-size:0.72rem; margin-bottom:2.5rem; text-transform:uppercase; letter-spacing:0.12em; }
+  svg { max-width:960px; width:100%; }
+</style>
+</head>
+<body>
+<h1>HerdWatch — System Architecture</h1>
+<div class="subtitle">Data flow · API endpoints · Component relationships</div>
+<svg viewBox="0 0 960 660" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#4ade80" opacity="0.7"/>
+    </marker>
+    <marker id="arr-copper" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#c87941" opacity="0.8"/>
+    </marker>
+    <marker id="arr-gray" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#5a7063" opacity="0.7"/>
+    </marker>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="660" fill="#0f1110"/>
+
+  <!-- Grid lines -->
+  <g stroke="#1d2520" stroke-width="1" opacity="0.5">
+    <line x1="0" y1="220" x2="960" y2="220"/>
+    <line x1="0" y1="420" x2="960" y2="420"/>
+    <line x1="320" y1="0" x2="320" y2="660"/>
+    <line x1="640" y1="0" x2="640" y2="660"/>
+  </g>
+
+  <!-- ── LAYER LABELS ── -->
+  <text x="12" y="24" fill="#5a7063" font-size="10" font-family="DM Mono" text-anchor="start" letter-spacing="1">HARDWARE / DATA SOURCE</text>
+  <text x="12" y="244" fill="#5a7063" font-size="10" font-family="DM Mono" text-anchor="start" letter-spacing="1">BACKEND / FLASK</text>
+  <text x="12" y="444" fill="#5a7063" font-size="10" font-family="DM Mono" text-anchor="start" letter-spacing="1">FRONTEND / BROWSER</text>
+
+  <!-- ═══════════ ROW 1: SOURCES ═══════════ -->
+
+  <!-- Video Source -->
+  <rect x="40" y="40" width="180" height="160" rx="12" fill="#161b18" stroke="#2f3d36" stroke-width="1.5"/>
+  <text x="130" y="70" text-anchor="middle" font-family="Syne" font-size="13" font-weight="700" fill="#dde8e0">Video Source</text>
+  <text x="130" y="88" text-anchor="middle" font-size="9" fill="#5a7063" font-family="DM Mono">cow.mp4 / webcam</text>
+  <text x="70" y="120" font-size="36" fill="#4ade80" opacity="0.6">📹</text>
+  <rect x="60" y="145" width="140" height="20" rx="4" fill="#1d2520"/>
+  <text x="130" y="159" text-anchor="middle" font-size="9" fill="#8fa897" font-family="DM Mono">video_analyzer.py</text>
+
+  <!-- Gemini AI -->
+  <rect x="390" y="40" width="180" height="160" rx="12" fill="#161b18" stroke="#2f3d36" stroke-width="1.5"/>
+  <text x="480" y="70" text-anchor="middle" font-family="Syne" font-size="13" font-weight="700" fill="#dde8e0">Google Gemini</text>
+  <text x="480" y="88" text-anchor="middle" font-size="9" fill="#5a7063" font-family="DM Mono">gemini-1.5-flash</text>
+  <text x="420" y="120" font-size="36" opacity="0.7">🤖</text>
+  <rect x="410" y="145" width="140" height="20" rx="4" fill="#1d2520"/>
+  <text x="480" y="159" text-anchor="middle" font-size="9" fill="#8fa897" font-family="DM Mono">langchain_google_genai</text>
+
+  <!-- Africa's Talking -->
+  <rect x="740" y="40" width="180" height="160" rx="12" fill="#161b18" stroke="#2f3d36" stroke-width="1.5"/>
+  <text x="830" y="70" text-anchor="middle" font-family="Syne" font-size="13" font-weight="700" fill="#dde8e0">Africa's Talking</text>
+  <text x="830" y="88" text-anchor="middle" font-size="9" fill="#5a7063" font-family="DM Mono">SMS Gateway · Sandbox</text>
+  <text x="768" y="120" font-size="36" opacity="0.7">📱</text>
+  <rect x="760" y="145" width="140" height="20" rx="4" fill="#1d2520"/>
+  <text x="830" y="159" text-anchor="middle" font-size="9" fill="#8fa897" font-family="DM Mono">at.py · SMS class</text>
+
+  <!-- ═══════════ ROW 2: FLASK BACKEND ═══════════ -->
+
+  <!-- Flask App box -->
+  <rect x="20" y="248" width="920" height="150" rx="14" fill="#161b18" stroke="#2f3d36" stroke-width="1.5"/>
+  <rect x="20" y="248" width="920" height="30" rx="14" fill="#1d2520"/>
+  <rect x="20" y="268" width="920" height="10" fill="#1d2520"/>
+  <text x="480" y="268" text-anchor="middle" font-family="Syne" font-size="13" font-weight="700" fill="#dde8e0">Flask Application — app.py</text>
+
+  <!-- Endpoints -->
+  <!-- GET /analysis/status -->
+  <rect x="40" y="292" width="140" height="90" rx="8" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="40" y="292" width="140" height="22" rx="8" fill="#1e3a28"/>
+  <rect x="40" y="305" width="140" height="9" fill="#1e3a28"/>
+  <text x="52" y="308" font-size="8" fill="#4ade80" font-family="DM Mono" font-weight="500">GET</text>
+  <text x="80" y="308" font-size="8" fill="#8fa897" font-family="DM Mono">/analysis/status</text>
+  <text x="110" y="328" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Latest analysis</text>
+  <text x="110" y="342" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">from shared JSON</text>
+  <text x="110" y="356" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">cow_analysis_data.json</text>
+  <text x="110" y="370" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">Poll: 5s interval</text>
+
+  <!-- GET /analysis/log -->
+  <rect x="195" y="292" width="140" height="90" rx="8" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="195" y="292" width="140" height="22" rx="8" fill="#1e3a28"/>
+  <rect x="195" y="305" width="140" height="9" fill="#1e3a28"/>
+  <text x="207" y="308" font-size="8" fill="#4ade80" font-family="DM Mono" font-weight="500">GET</text>
+  <text x="232" y="308" font-size="8" fill="#8fa897" font-family="DM Mono">/analysis/log</text>
+  <text x="265" y="328" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Parse analysis_log.txt</text>
+  <text x="265" y="342" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Returns frame entries</text>
+  <text x="265" y="356" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">with error flags</text>
+  <text x="265" y="370" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">?lines=100</text>
+
+  <!-- POST /test -->
+  <rect x="350" y="292" width="130" height="90" rx="8" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="350" y="292" width="130" height="22" rx="8" fill="#3d2416"/>
+  <rect x="350" y="305" width="130" height="9" fill="#3d2416"/>
+  <text x="362" y="308" font-size="8" fill="#c87941" font-family="DM Mono" font-weight="500">POST</text>
+  <text x="396" y="308" font-size="8" fill="#8fa897" font-family="DM Mono">/test</text>
+  <text x="415" y="328" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">AI chat via</text>
+  <text x="415" y="342" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">FarmerChatInterface</text>
+  <text x="415" y="356" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Gemini + frame image</text>
+  <text x="415" y="370" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">{message}→{response}</text>
+
+  <!-- POST /send -->
+  <rect x="495" y="292" width="130" height="90" rx="8" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="495" y="292" width="130" height="22" rx="8" fill="#3d2416"/>
+  <rect x="495" y="305" width="130" height="9" fill="#3d2416"/>
+  <text x="507" y="308" font-size="8" fill="#c87941" font-family="DM Mono" font-weight="500">POST</text>
+  <text x="541" y="308" font-size="8" fill="#8fa897" font-family="DM Mono">/send</text>
+  <text x="560" y="328" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Optional AI enhance</text>
+  <text x="560" y="342" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">then AT SMS send</text>
+  <text x="560" y="356" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">{recipients, msg,</text>
+  <text x="560" y="370" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">use_ai: bool}</text>
+
+  <!-- POST /sms/receive -->
+  <rect x="640" y="292" width="140" height="90" rx="8" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="640" y="292" width="140" height="22" rx="8" fill="#3d2416"/>
+  <rect x="640" y="305" width="140" height="9" fill="#3d2416"/>
+  <text x="652" y="308" font-size="8" fill="#c87941" font-family="DM Mono" font-weight="500">POST</text>
+  <text x="686" y="308" font-size="8" fill="#8fa897" font-family="DM Mono">/sms/receive</text>
+  <text x="710" y="328" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">AT webhook · parse</text>
+  <text x="710" y="342" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">incoming SMS, run AI,</text>
+  <text x="710" y="356" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">auto-reply to farmer</text>
+  <text x="710" y="370" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">Stores in memory</text>
+
+  <!-- GET /conversations -->
+  <rect x="795" y="292" width="135" height="90" rx="8" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="795" y="292" width="135" height="22" rx="8" fill="#1e3a28"/>
+  <rect x="795" y="305" width="135" height="9" fill="#1e3a28"/>
+  <text x="807" y="308" font-size="8" fill="#4ade80" font-family="DM Mono" font-weight="500">GET</text>
+  <text x="833" y="308" font-size="8" fill="#8fa897" font-family="DM Mono">/conversations</text>
+  <text x="862" y="328" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">All SMS threads or</text>
+  <text x="862" y="342" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">single ?phone=...</text>
+  <text x="862" y="356" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">POST /clear to wipe</text>
+  <text x="862" y="370" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">In-memory dict</text>
+
+  <!-- ═══════════ ROW 3: FRONTEND VIEWS ═══════════ -->
+
+  <!-- Dashboard -->
+  <rect x="40" y="448" width="155" height="90" rx="10" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="40" y="448" width="155" height="4" rx="2" fill="#4ade80"/>
+  <text x="117" y="470" text-anchor="middle" font-family="Syne" font-size="11" font-weight="700" fill="#dde8e0">Dashboard</text>
+  <text x="117" y="486" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Status ring · Herd mini</text>
+  <text x="117" y="500" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Activity chart · Quick</text>
+  <text x="117" y="514" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">actions + shortcuts</text>
+  <text x="117" y="527" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">Polls /analysis/status</text>
+
+  <!-- Analysis -->
+  <rect x="210" y="448" width="155" height="90" rx="10" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="210" y="448" width="155" height="4" rx="2" fill="#4ade80"/>
+  <text x="287" y="470" text-anchor="middle" font-family="Syne" font-size="11" font-weight="700" fill="#dde8e0">AI Analysis</text>
+  <text x="287" y="486" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Frame log table</text>
+  <text x="287" y="500" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Filter ok/error</text>
+  <text x="287" y="514" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Refresh on demand</text>
+  <text x="287" y="527" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">Reads /analysis/log</text>
+
+  <!-- Herd -->
+  <rect x="380" y="448" width="155" height="90" rx="10" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="380" y="448" width="155" height="4" rx="2" fill="#4ade80"/>
+  <text x="457" y="470" text-anchor="middle" font-family="Syne" font-size="11" font-weight="700" fill="#dde8e0">Herd</text>
+  <text x="457" y="486" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Individual cow cards</text>
+  <text x="457" y="500" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Search + filter status</text>
+  <text x="457" y="514" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Click → AI chat query</text>
+  <text x="457" y="527" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">State in JS, sync to AI</text>
+
+  <!-- AI Chat -->
+  <rect x="550" y="448" width="120" height="90" rx="10" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="550" y="448" width="120" height="4" rx="2" fill="#c87941"/>
+  <text x="610" y="470" text-anchor="middle" font-family="Syne" font-size="11" font-weight="700" fill="#dde8e0">AI Chat</text>
+  <text x="610" y="486" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Bubble UI + typing</text>
+  <text x="610" y="500" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Suggestion chips</text>
+  <text x="610" y="514" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Enter to send</text>
+  <text x="610" y="527" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">POST /test</text>
+
+  <!-- SMS Center -->
+  <rect x="685" y="448" width="120" height="90" rx="10" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="685" y="448" width="120" height="4" rx="2" fill="#c87941"/>
+  <text x="745" y="470" text-anchor="middle" font-family="Syne" font-size="11" font-weight="700" fill="#dde8e0">SMS Center</text>
+  <text x="745" y="486" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Compose + AI toggle</text>
+  <text x="745" y="500" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Preview AI response</text>
+  <text x="745" y="514" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Recent sends log</text>
+  <text x="745" y="527" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">POST /send</text>
+
+  <!-- Conversations -->
+  <rect x="820" y="448" width="120" height="90" rx="10" fill="#222b25" stroke="#2f3d36"/>
+  <rect x="820" y="448" width="120" height="4" rx="2" fill="#c87941"/>
+  <text x="880" y="470" text-anchor="middle" font-family="Syne" font-size="11" font-weight="700" fill="#dde8e0">Conversations</text>
+  <text x="880" y="486" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Phone threads list</text>
+  <text x="880" y="500" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Message thread view</text>
+  <text x="880" y="514" text-anchor="middle" font-size="8" fill="#5a7063" font-family="DM Mono">Clear history btn</text>
+  <text x="880" y="527" text-anchor="middle" font-size="8" fill="#3a4d42" font-family="DM Mono">GET + POST /conv...</text>
+
+  <!-- ═══════════ ARROWS: Sources → Backend ═══════════ -->
+
+  <!-- video_analyzer writes JSON → /analysis/status -->
+  <line x1="130" y1="200" x2="130" y2="248" stroke="#4ade80" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)" opacity="0.7"/>
+  <text x="134" y="235" font-size="8" fill="#3a4d42" font-family="DM Mono">cow_analysis_data.json</text>
+
+  <!-- Gemini ↔ Flask /test -->
+  <line x1="480" y1="200" x2="415" y2="292" stroke="#c87941" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-copper)" opacity="0.7"/>
+  <text x="420" y="255" font-size="8" fill="#3a4d42" font-family="DM Mono">AI inference</text>
+
+  <!-- AT ↔ /send and /sms/receive -->
+  <line x1="830" y1="200" x2="710" y2="292" stroke="#c87941" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-copper)" opacity="0.7"/>
+  <text x="754" y="253" font-size="8" fill="#3a4d42" font-family="DM Mono">SMS API</text>
+
+  <!-- ═══════════ ARROWS: Backend → Frontend ═══════════ -->
+
+  <!-- /analysis/status → Dashboard -->
+  <line x1="110" y1="398" x2="110" y2="448" stroke="#4ade80" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)" opacity="0.6"/>
+
+  <!-- /analysis/log → Analysis view -->
+  <line x1="265" y1="398" x2="265" y2="448" stroke="#4ade80" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)" opacity="0.6"/>
+
+  <!-- /test → AI Chat -->
+  <line x1="415" y1="398" x2="600" y2="448" stroke="#c87941" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-copper)" opacity="0.6"/>
+
+  <!-- /send → SMS Center -->
+  <line x1="560" y1="398" x2="730" y2="448" stroke="#c87941" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-copper)" opacity="0.6"/>
+
+  <!-- /conversations → Conversations view -->
+  <line x1="862" y1="398" x2="862" y2="448" stroke="#4ade80" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)" opacity="0.6"/>
+
+  <!-- ═══════════ LEGEND ═══════════ -->
+  <rect x="40" y="556" width="880" height="80" rx="8" fill="#161b18" stroke="#2f3d36"/>
+  <text x="480" y="578" text-anchor="middle" font-family="Syne" font-size="11" font-weight="700" fill="#8fa897">Legend</text>
+
+  <line x1="70" y1="600" x2="120" y2="600" stroke="#4ade80" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="130" y="604" font-size="9" fill="#8fa897" font-family="DM Mono">GET request / data read</text>
+
+  <line x1="270" y1="600" x2="320" y2="600" stroke="#c87941" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arr-copper)"/>
+  <text x="330" y="604" font-size="9" fill="#8fa897" font-family="DM Mono">POST request / action</text>
+
+  <rect x="480" y="593" width="12" height="12" rx="2" fill="#1e3a28" stroke="#4ade80" stroke-width="1"/>
+  <text x="500" y="604" font-size="9" fill="#8fa897" font-family="DM Mono">GET endpoint</text>
+
+  <rect x="600" y="593" width="12" height="12" rx="2" fill="#3d2416" stroke="#c87941" stroke-width="1"/>
+  <text x="620" y="604" font-size="9" fill="#8fa897" font-family="DM Mono">POST endpoint</text>
+
+  <text x="730" y="604" font-size="9" fill="#5a7063" font-family="DM Mono">Poll interval: /status=5s · /log=15s</text>
+</svg>
+</body>
+</html>

@@ -4,24 +4,64 @@ import json
 import time
 import cv2
 import base64
-from datetime import datetime
+import hashlib
+from datetime import datetime, timedelta
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import AzureChatOpenAI
+from dotenv import load_dotenv
 
-# ✅ Set up Google API Key
-os.environ["GOOGLE_API_KEY"] = "AIzaSyDA9-0foCmBqWltPb8r3fOWoyI7iQLIhDc"
+load_dotenv()
 
-# ✅ Initialize the Gemini model
-model = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
+# ✅ Set up Azure OpenAI Configuration
+api_key = os.getenv("AZURE_OPENAI_API_KEY")
+endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+chat_deployment = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME")
+
+if not api_key or not endpoint or not chat_deployment:
+    raise ValueError("Azure OpenAI credentials missing. Please set AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, and AZURE_OPENAI_CHAT_DEPLOYMENT_NAME in .env file.")
+
+# ✅ Initialize the Azure OpenAI model
+model = AzureChatOpenAI(
+    openai_api_version="2024-02-15-preview",
+    azure_endpoint=endpoint,
+    openai_api_key=api_key,
+    deployment_name=chat_deployment,
+    temperature=0.7
+)
 
 # Shared data files
 SHARED_DATA_FILE = "cow_analysis_data.json"
 CHAT_LOG_FILE = "chat_log.txt"
 CURRENT_FRAME_FILE = "current_frame.jpg"
+RESPONSE_CACHE_FILE = "response_cache.json"
+
+# Response cache to avoid quota issues
+CACHE_TTL = 600  # 10 minutes
 
 class FarmerChatInterface:
     def __init__(self):
         self.chat_history = []
+        self.response_cache = self._load_cache()
+        self.last_api_call = 0
+        self.min_api_interval = 2  # Minimum 2 seconds between API calls
+        
+    def _load_cache(self):
+        """Load cached responses from file"""
+        try:
+            if os.path.exists(RESPONSE_CACHE_FILE):
+                with open(RESPONSE_CACHE_FILE, 'r') as f:
+                    return json.load(f)
+        except:
+            pass
+        return {}
+    
+    def _save_cache(self):
+        """Save response cache to file"""
+        try:
+            with open(RESPONSE_CACHE_FILE, 'w') as f:
+                json.dump(self.response_cache, f)
+        except Exception as e:
+            print(f"Error saving cache: {e}")
         
     def get_current_analysis(self):
         """Get the latest analysis from the video analyzer"""
@@ -54,9 +94,25 @@ class FarmerChatInterface:
             return None
     
     def chat_with_farmer(self, farmer_question):
-        """Handle farmer's chat with current analysis context"""
+        """Handle farmer's chat with current analysis context and caching"""
         current_data = self.get_current_analysis()
-        current_frame = self.get_current_frame()
+        
+        # Create a cache key from the question
+        cache_key = hashlib.md5(farmer_question.lower().encode()).hexdigest()
+        
+        # Check cache first
+        if cache_key in self.response_cache:
+            cached = self.response_cache[cache_key]
+            if datetime.fromisoformat(cached['timestamp']) > datetime.now() - timedelta(seconds=CACHE_TTL):
+                print(f"[CACHE HIT] Using cached response for: {farmer_question[:50]}...")
+                return cached['response']
+        
+        # Rate limit API calls
+        time_since_last_call = time.time() - self.last_api_call
+        if time_since_last_call < self.min_api_interval:
+            wait_time = self.min_api_interval - time_since_last_call
+            print(f"[RATE LIMIT] Waiting {wait_time:.1f}s before next API call...")
+            time.sleep(wait_time)
         
         # Create context-aware message
         context_message = f"""
@@ -69,36 +125,47 @@ class FarmerChatInterface:
         Farmer's Question: {farmer_question}
         
         Please provide helpful, practical farming advice based on the current cow monitoring situation and the farmer's question.
-        If the analysis shows any concerning patterns, mention them. Be concise but informative.Make sure this response is short and precise.
+        If the analysis shows any concerning patterns, mention them. Be concise but informative. Keep response under 150 words.
         """
         
         try:
-            # If there's a current frame, include it for visual context
-            if current_frame is not None:
-                _, img_buffer = cv2.imencode('.jpg', current_frame)
-                image_data = base64.b64encode(img_buffer).decode('utf-8')
-                
-                message = HumanMessage(
-                    content=[
-                        {"type": "text", "text": context_message},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
-                    ]
-                )
-            else:
-                message = HumanMessage(content=[{"type": "text", "text": context_message}])
-            
+            message = HumanMessage(content=[{"type": "text", "text": context_message}])
+            self.last_api_call = time.time()
             response = model.invoke([message])
-            return response.content
+            response_text = response.content
+            
+            # Cache the response
+            self.response_cache[cache_key] = {
+                'response': response_text,
+                'timestamp': datetime.now().isoformat(),
+                'question': farmer_question
+            }
+            self._save_cache()
+            
+            return response_text
             
         except Exception as e:
-            return f"Sorry, I couldn't process your question right now. Error: {str(e)}"
+            error_str = str(e)
+            
+            # Handle quota exceeded error gracefully
+            if "429" in error_str or "quota" in error_str.lower():
+                fallback = f"API quota exceeded - currently in demo mode. However, based on the latest analysis: {current_data.get('analysis', 'No data available')}. Please try again in a few minutes."
+                print(f"[QUOTA EXCEEDED] {error_str[:100]}")
+                return fallback
+            
+            # Handle other errors
+            print(f"[API ERROR] {error_str[:100]}")
+            return f"Sorry, I couldn't process your question right now. Error: {error_str[:100]}"
     
     def save_chat_log(self, farmer_input, ai_response):
         """Save chat interaction to log file"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(CHAT_LOG_FILE, "a", encoding="utf-8") as file:
-            file.write(f"{timestamp} - FARMER: {farmer_input}\n")
-            file.write(f"{timestamp} - AI: {ai_response}\n\n")
+        try:
+            with open(CHAT_LOG_FILE, "a", encoding="utf-8") as file:
+                file.write(f"{timestamp} - FARMER: {farmer_input}\n")
+                file.write(f"{timestamp} - AI: {ai_response}\n\n")
+        except Exception as e:
+            print(f"Error saving chat log: {e}")
     
     def display_status(self):
         """Display current system status"""

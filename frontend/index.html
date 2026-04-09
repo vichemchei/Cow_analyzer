@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>HerdWatch — Cow Monitoring System</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ░░ SIDEBAR ░░ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">HW</div>
+    <div class="logo-text">Herd<br/><span>Watch</span></div>
+  </div>
+
+  <div class="nav-section-label">Monitor</div>
+  <button class="nav-item active" data-view="dashboard" onclick="setView('dashboard',this)">
+    <span class="nav-icon">⬡</span> Dashboard
+  </button>
+  <button class="nav-item" data-view="analysis" onclick="setView('analysis',this)">
+    <span class="nav-icon">◈</span> AI Analysis
+  </button>
+  <button class="nav-item" data-view="herd" onclick="setView('herd',this)">
+    <span class="nav-icon">◉</span> Herd
+  </button>
+
+  <div class="nav-section-label" style="margin-top:1.5rem">Communication</div>
+  <button class="nav-item" data-view="chat" onclick="setView('chat',this)">
+    <span class="nav-icon">◧</span> AI Chat
+  </button>
+  <button class="nav-item" data-view="sms" onclick="setView('sms',this)">
+    <span class="nav-icon">◨</span> SMS Center
+  </button>
+  <button class="nav-item" data-view="conversations" onclick="setView('conversations',this)">
+    <span class="nav-icon">◫</span> Conversations
+  </button>
+
+  <div class="sidebar-bottom">
+    <div class="system-status-card" id="systemStatusCard">
+      <div class="ss-dot" id="ssDot"></div>
+      <div>
+        <div class="ss-label">Analyzer</div>
+        <div class="ss-val" id="ssVal">Checking…</div>
+      </div>
+    </div>
+    <div class="sidebar-frame">Frame <span id="sidebarFrame">—</span></div>
+  </div>
+</nav>
+
+<!-- ░░ MAIN ░░ -->
+<main class="main-area">
+
+  <!-- ── TOP BAR ── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="view-title" id="viewTitle">Dashboard</div>
+      <div class="breadcrumb" id="breadcrumb">Overview · Live</div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-stat" id="tb-cows">
+        <span class="ts-val" id="tbCowVal">—</span>
+        <span class="ts-lbl">Cows</span>
+      </div>
+      <div class="topbar-stat">
+        <span class="ts-val" id="tbEatVal">—</span>
+        <span class="ts-lbl">Eating</span>
+      </div>
+      <div class="topbar-stat">
+        <span class="ts-val" id="tbErrVal">—</span>
+        <span class="ts-lbl">Errors</span>
+      </div>
+      <div class="topbar-clock" id="clock">00:00:00</div>
+    </div>
+  </header>
+
+  <!-- ════════════════════════════════════ VIEW: DASHBOARD ═══ -->
+  <div class="view active" id="view-dashboard">
+    <div class="dash-grid">
+
+      <!-- Live status card -->
+      <div class="card card-status">
+        <div class="card-eyebrow">Live Analysis</div>
+        <div class="card-title">Current Status</div>
+        <div class="status-display" id="statusDisplay">
+          <div class="status-ring" id="statusRing">
+            <div class="ring-inner">
+              <span class="ring-val" id="ringVal">—</span>
+              <span class="ring-sub">cows</span>
+            </div>
+          </div>
+          <div class="status-meta">
+            <div class="sm-row"><span class="sm-key">Status</span><span class="sm-val" id="smStatus">—</span></div>
+            <div class="sm-row"><span class="sm-key">Frame</span><span class="sm-val" id="smFrame">—</span></div>
+            <div class="sm-row"><span class="sm-key">Updated</span><span class="sm-val" id="smUpdated">—</span></div>
+            <div class="sm-row"><span class="sm-key">Feed</span><span class="sm-val" id="smFeed">hay</span></div>
+          </div>
+        </div>
+        <div class="analysis-snippet" id="analysisSnippet">—</div>
+      </div>
+
+      <!-- Mini herd grid -->
+      <div class="card card-herd-mini">
+        <div class="card-eyebrow">Herd</div>
+        <div class="card-title">Individual Cows</div>
+        <div class="mini-herd-grid" id="miniHerdGrid"></div>
+      </div>
+
+      <!-- Frame chart -->
+      <div class="card card-chart">
+        <div class="card-eyebrow">Activity</div>
+        <div class="card-title">Cow Count Per Frame</div>
+        <div class="chart-area" id="chartArea">
+          <canvas id="activityChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="card card-actions">
+        <div class="card-eyebrow">Quick Actions</div>
+        <div class="card-title">Controls</div>
+        <div class="actions-list">
+          <button class="action-btn" onclick="quickChat('How many cows are currently eating?')">
+            <span class="ab-icon">◈</span> Ask AI Status
+          </button>
+          <button class="action-btn" onclick="quickChat('Do any cows look unhealthy or stressed?')">
+            <span class="ab-icon">◉</span> Health Check
+          </button>
+          <button class="action-btn" onclick="quickChat('Give me a full summary of the herd activity today.')">
+            <span class="ab-icon">◧</span> Daily Summary
+          </button>
+          <button class="action-btn" onclick="setView('sms', document.querySelector('[data-view=sms]'))">
+            <span class="ab-icon">◨</span> Send Alert SMS
+          </button>
+          <button class="action-btn btn-danger" onclick="clearConversations()">
+            <span class="ab-icon">✕</span> Clear History
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ VIEW: ANALYSIS ════ -->
+  <div class="view" id="view-analysis">
+    <div class="analysis-controls">
+      <div class="ctrl-group">
+        <label class="ctrl-label">Lines</label>
+        <select id="logLines" onchange="loadAnalysisLog()" class="ctrl-select">
+          <option value="30">30</option>
+          <option value="60">60</option>
+          <option value="100" selected>100</option>
+          <option value="200">200</option>
+        </select>
+      </div>
+      <div class="ctrl-group">
+        <label class="ctrl-label">Filter</label>
+        <select id="logFilter" onchange="filterLog()" class="ctrl-select">
+          <option value="all">All</option>
+          <option value="ok">Successful</option>
+          <option value="error">Errors only</option>
+        </select>
+      </div>
+      <button class="ctrl-btn" onclick="loadAnalysisLog()">↻ Refresh</button>
+      <div class="ctrl-total">Total frames logged: <strong id="totalFrames">—</strong></div>
+    </div>
+
+    <div class="log-table-wrap">
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Frame</th>
+            <th>Analysis</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="logTableBody">
+          <tr><td colspan="4" class="log-empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ VIEW: HERD ════════ -->
+  <div class="view" id="view-herd">
+    <div class="herd-toolbar">
+      <input class="herd-search" id="herdSearch" placeholder="Search cows…" oninput="filterHerd()" />
+      <div class="herd-filters">
+        <button class="hf-btn active" onclick="filterHerdStatus('all',this)">All</button>
+        <button class="hf-btn" onclick="filterHerdStatus('eating',this)">Eating</button>
+        <button class="hf-btn" onclick="filterHerdStatus('idle',this)">Idle</button>
+      </div>
+    </div>
+    <div class="herd-cards" id="herdCards"></div>
+  </div>
+
+  <!-- ════════════════════════════════════ VIEW: AI CHAT ═════ -->
+  <div class="view view-chat" id="view-chat">
+    <div class="chat-container">
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-date-divider">Today</div>
+        <div class="chat-bubble ai">
+          <div class="bubble-avatar">AI</div>
+          <div class="bubble-body">
+            <div class="bubble-text">
+              Hello, I'm your HerdWatch AI assistant powered by Gemini. I have access to your live video analysis data. Ask me anything about your cows' feeding patterns, health status, or activity. 🌾
+            </div>
+            <div class="bubble-time">just now</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-bar">
+        <div class="chat-suggestions" id="chatSuggestions">
+          <button class="suggestion-chip" onclick="sendChatMsg('How many cows are eating right now?')">How many cows eating?</button>
+          <button class="suggestion-chip" onclick="sendChatMsg('Do any cows look sick or stressed?')">Any health concerns?</button>
+          <button class="suggestion-chip" onclick="sendChatMsg('What feed are the cows eating?')">What are they eating?</button>
+          <button class="suggestion-chip" onclick="sendChatMsg('Give me a summary of today\'s feeding activity.')">Daily summary</button>
+        </div>
+        <div class="chat-input-row">
+          <textarea
+            id="chatInput"
+            class="chat-textarea"
+            placeholder="Ask about your herd…"
+            rows="1"
+            onkeydown="handleChatKey(event)"
+            oninput="autoResize(this)"
+          ></textarea>
+          <button class="chat-send-btn" onclick="sendChat()" id="chatSendBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ VIEW: SMS CENTER ══ -->
+  <div class="view" id="view-sms">
+    <div class="sms-layout">
+
+      <div class="sms-compose-card">
+        <div class="card-eyebrow">Africa's Talking</div>
+        <div class="card-title">Compose SMS</div>
+
+        <div class="form-group">
+          <label class="form-label">Recipients <span class="form-hint">(comma-separated)</span></label>
+          <input type="text" id="smsRecipients" class="form-input" placeholder="+254743134869, +254700000000"/>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            Message
+            <label class="toggle-wrap">
+              <input type="checkbox" id="useAiToggle" checked/>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">AI-enhance</span>
+            </label>
+          </label>
+          <textarea id="smsMessage" class="form-textarea" placeholder="Type your message… AI will enhance it before sending if toggle is on." rows="4"></textarea>
+          <div class="char-count"><span id="charCount">0</span> / 160</div>
+        </div>
+
+        <div class="form-group" id="aiPreviewWrap" style="display:none">
+          <label class="form-label">AI-enhanced preview</label>
+          <div class="ai-preview-box" id="aiPreviewBox">—</div>
+        </div>
+
+        <div class="sms-actions">
+          <button class="sms-preview-btn" onclick="previewAI()">Preview AI response</button>
+          <button class="sms-send-btn" onclick="sendSMS()" id="smsSendBtn">
+            Send SMS ➤
+          </button>
+        </div>
+
+        <div class="sms-feedback" id="smsFeedback"></div>
+      </div>
+
+      <div class="sms-info-card">
+        <div class="card-eyebrow">Integration</div>
+        <div class="card-title">Endpoint Reference</div>
+        <div class="endpoint-list">
+          <div class="ep-item">
+            <div class="ep-method post">POST</div>
+            <div class="ep-path">/send</div>
+            <div class="ep-desc">Send SMS with optional AI</div>
+          </div>
+          <div class="ep-item">
+            <div class="ep-method post">POST</div>
+            <div class="ep-path">/sms/receive</div>
+            <div class="ep-desc">AT incoming webhook</div>
+          </div>
+          <div class="ep-item">
+            <div class="ep-method post">POST</div>
+            <div class="ep-path">/sms/delivery</div>
+            <div class="ep-desc">Delivery report callback</div>
+          </div>
+          <div class="ep-item">
+            <div class="ep-method get">GET</div>
+            <div class="ep-path">/conversations</div>
+            <div class="ep-desc">All conversation history</div>
+          </div>
+        </div>
+
+        <div class="card-title" style="margin-top:2rem">Recent Sends</div>
+        <div class="recent-sends" id="recentSends">
+          <div class="rs-empty">No messages sent this session.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ VIEW: CONVERSATIONS ══ -->
+  <div class="view" id="view-conversations">
+    <div class="conv-layout">
+      <div class="conv-sidebar">
+        <div class="conv-sidebar-head">
+          <div class="card-eyebrow">SMS Conversations</div>
+          <button class="ctrl-btn" onclick="loadConversations()">↻</button>
+        </div>
+        <div class="conv-list" id="convList">
+          <div class="conv-empty">Loading conversations…</div>
+        </div>
+        <button class="clear-conv-btn" onclick="clearConversations()">Clear All History</button>
+      </div>
+      <div class="conv-thread" id="convThread">
+        <div class="conv-thread-empty">Select a conversation to view</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ░░ TOAST ░░ -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
