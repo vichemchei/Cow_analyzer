@@ -317,3 +317,85 @@ class VideoProcessor:
 
 # Global processor instance
 video_processor = VideoProcessor()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Standalone CLI Interface (for development/testing without Flask)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run_standalone_analysis():
+    """
+    Standalone CLI interface for running video analysis without Flask
+    Allows user to choose between video file or webcam input
+    """
+    print("\n" + "=" * 70)
+    print("🐄 HerdWatch - Cow Video Analysis (Standalone Mode)")
+    print("=" * 70)
+    print("📹 Powered by Azure OpenAI (GPT-4.1)")
+    print("=" * 70)
+    
+    # Ask user for video source
+    print("\nChoose video source:")
+    print("  1. Video file (cow.mp4)")
+    print("  2. Webcam (live feed)")
+    print("  3. Custom file path")
+    
+    choice = input("\nEnter choice (1, 2, or 3): ").strip()
+    
+    video_source = None
+    
+    if choice == "2":
+        print("📹 Using webcam...")
+        video_processor.start_webcam_processing(duration=3600)  # 1 hour
+        
+    elif choice == "3":
+        filepath = input("Enter video file path: ").strip()
+        if os.path.exists(filepath):
+            print(f"📁 Using video file: {filepath}")
+            video_processor.start_video_processing(filepath)
+        else:
+            print(f"❌ Error: File not found: {filepath}")
+            return
+    else:
+        # Default to cow.mp4
+        if os.path.exists("cow.mp4"):
+            print("📁 Using default video file: cow.mp4")
+            video_processor.start_video_processing("cow.mp4")
+        else:
+            print("❌ Error: cow.mp4 not found")
+            return
+    
+    # Keep main thread alive while processing
+    print("\n⏹️  Press Ctrl+C to stop analysis")
+    print("=" * 70)
+    
+    try:
+        while video_processor.is_processing:
+            status = video_processor.get_status()
+            print(f"\r🔄 Frames processed: {status['frame_count']} | "
+                  f"Status: {status['status']}", end="", flush=True)
+            time.sleep(1)
+        
+        print("\n" + "=" * 70)
+        print("✅ Analysis complete!")
+        print("=" * 70)
+        
+    except KeyboardInterrupt:
+        print("\n" + "=" * 70)
+        print("🛑 Analysis stopped by user")
+        video_processor.stop_processing()
+        print("=" * 70)
+    
+    except Exception as e:
+        print(f"\n❌ Error during analysis: {e}")
+        video_processor.stop_processing()
+
+
+if __name__ == "__main__":
+    """
+    Standalone entry point for video analysis
+    Runs independently of Flask backend
+    
+    Usage:
+        python video_processor.py
+    """
+    run_standalone_analysis()
