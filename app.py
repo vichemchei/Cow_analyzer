@@ -322,21 +322,42 @@ def clear_conversations_route():
 @app.route("/analysis/status", methods=["GET"])
 def analysis_status():
     """
-    Returns latest data from cow_analysis_data.json written by video_analyzer.py.
-    Frontend polls this every few seconds.
+    Returns the latest analysis status.
+    Merges live video_processor in-memory state (real-time) with the
+    persisted cow_analysis_data.json so the dashboard stays live during processing.
     """
     try:
+        # Start with persisted data (last completed analysis)
+        disk_data = {}
         if os.path.exists(SHARED_DATA_FILE):
-            with open(SHARED_DATA_FILE, "r") as f:
-                data = json.load(f)
-            return jsonify(data), 200
+            try:
+                with open(SHARED_DATA_FILE, "r") as f:
+                    disk_data = json.load(f)
+            except Exception:
+                pass
+
+        # Override with live in-memory state if processor is active
+        proc_status = video_processor.get_status()
+        if proc_status["is_processing"] or proc_status["status"] in ("processing", "completed"):
+            return jsonify({
+                "timestamp": proc_status["timestamp"],
+                "analysis": proc_status["latest_analysis"],
+                "frame_count": proc_status["frame_count"],
+                "status": "running" if proc_status["is_processing"] else proc_status["status"],
+            }), 200
+
+        # Fall back to disk data
+        if disk_data:
+            return jsonify(disk_data), 200
+
         return jsonify({
             "timestamp": datetime.now().isoformat(),
-            "analysis": "No analysis data yet. Start video_analyzer.py.",
+            "analysis": "No analysis data yet. Upload a video and click Process.",
             "frame_count": 0,
-            "status": "disconnected",
+            "status": "idle",
         }), 200
     except Exception as e:
+        logger.error(f"/analysis/status error: {e}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
@@ -601,6 +622,135 @@ def list_uploads():
     except Exception as e:
         logger.error(f"/video/list-uploads error: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/video/delete/<filename>", methods=["DELETE"])
+def delete_video(filename):
+    """Delete an uploaded video file"""
+    try:
+        # Sanitize filename to prevent directory traversal
+        safe_filename = secure_filename(filename)
+        if not safe_filename or safe_filename != filename:
+            return jsonify({"error": "Invalid filename"}), 400
+        
+        filepath = os.path.join(UPLOAD_FOLDER, safe_filename)
+        
+        # Verify file exists and is in uploads folder
+        if not os.path.exists(filepath):
+            return jsonify({"error": "File not found"}), 404
+        
+        if not os.path.isfile(filepath):
+            return jsonify({"error": "Not a file"}), 400
+        
+        # Delete the file
+        os.remove(filepath)
+        logger.info(f"Video deleted: {filename}")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Video '{filename}' deleted successfully"
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"/video/delete error: {e}")
+        return jsonify({
+            "error": "Failed to delete video",
+            "code": ERROR_VIDEO
+        }), 500
+
+
+@app.route("/api/herd", methods=["GET"])
+def get_herd_data():
+    """Get herd data with current status from analysis"""
+    try:
+        # Try to load analysis data which contains real herd status
+        if os.path.exists(SHARED_DATA_FILE):
+            with open(SHARED_DATA_FILE, "r") as f:
+                analysis_data = json.load(f)
+        else:
+            analysis_data = {}
+        
+        # Extract herd information - can be expanded based on analysis structure
+        # For now, return a structured herd list that frontend can use
+        herd_data = {
+            "herd": [
+                {
+                    "id": "COW-001",
+                    "name": "Lewis",
+                    "status": analysis_data.get("cow_001_status", "eating"),
+                    "detail": analysis_data.get("cow_001_detail", "Eating hay consistently"),
+                    "tag": None,
+                    "last_update": analysis_data.get("timestamp", "")
+                },
+                {
+                    "id": "COW-002",
+                    "name": "Cow 2",
+                    "status": analysis_data.get("cow_002_status", "eating"),
+                    "detail": analysis_data.get("cow_002_detail", "Eating hay"),
+                    "tag": None,
+                    "last_update": analysis_data.get("timestamp", "")
+                },
+                {
+                    "id": "COW-003",
+                    "name": "Cow 3",
+                    "status": analysis_data.get("cow_003_status", "eating"),
+                    "detail": analysis_data.get("cow_003_detail", "Eating hay"),
+                    "tag": None,
+                    "last_update": analysis_data.get("timestamp", "")
+                },
+                {
+                    "id": "COW-004",
+                    "name": "Cow 4",
+                    "status": analysis_data.get("cow_004_status", "eating"),
+                    "detail": analysis_data.get("cow_004_detail", "Eating hay"),
+                    "tag": None,
+                    "last_update": analysis_data.get("timestamp", "")
+                },
+                {
+                    "id": "COW-005",
+                    "name": "Cow 5",
+                    "status": analysis_data.get("cow_005_status", "eating"),
+                    "detail": analysis_data.get("cow_005_detail", "Eating hay"),
+                    "tag": None,
+                    "last_update": analysis_data.get("timestamp", "")
+                },
+                {
+                    "id": "COW-006",
+                    "name": "Cow 6",
+                    "status": analysis_data.get("cow_006_status", "eating"),
+                    "detail": analysis_data.get("cow_006_detail", "Eating hay"),
+                    "tag": None,
+                    "last_update": analysis_data.get("timestamp", "")
+                },
+                {
+                    "id": "COW-007",
+                    "name": "Cow 7",
+                    "status": analysis_data.get("cow_007_status", "eating"),
+                    "detail": analysis_data.get("cow_007_detail", "Eating hay"),
+                    "tag": None,
+                    "last_update": analysis_data.get("timestamp", "")
+                },
+                {
+                    "id": "COW-600",
+                    "name": "Cow #600",
+                    "status": analysis_data.get("cow_600_status", "eating"),
+                    "detail": analysis_data.get("cow_600_detail", "Tag 600 · Black & white"),
+                    "tag": "600",
+                    "last_update": analysis_data.get("timestamp", "")
+                }
+            ],
+            "timestamp": analysis_data.get("timestamp", datetime.now().isoformat()),
+            "analysis_available": os.path.exists(SHARED_DATA_FILE)
+        }
+        
+        return jsonify(herd_data), 200
+    
+    except Exception as e:
+        logger.error(f"/api/herd error: {e}")
+        return jsonify({
+            "error": "Failed to fetch herd data",
+            "code": "HERD_ERROR"
+        }), 500
 
 @app.errorhandler(500)
 def server_error(_): return jsonify({"error": "Internal server error"}), 500

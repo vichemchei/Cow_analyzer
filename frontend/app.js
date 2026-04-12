@@ -138,8 +138,12 @@ function setView(name, btn) {
   if (name === "video-source") loadVideoSourceView();
   if (name === "analysis") loadAnalysisLog();
   if (name === "conversations") loadConversations();
-  if (name === "herd") renderHerdCards();
-  if (name === "dashboard") renderMiniHerd();
+  if (name === "herd") {
+    loadHerdData().then(() => renderHerdCards());
+  }
+  if (name === "dashboard") {
+    loadHerdData().then(() => renderMiniHerd());
+  }
 }
 
 // ─── GET /analysis/status  (polled) ──────────────────────────
@@ -238,6 +242,20 @@ function renderLogTable() {
 function filterLog() { renderLogTable(); }
 
 // ─── Herd cards ───────────────────────────────────────────────
+async function loadHerdData() {
+  // Fetch herd data from API and update state
+  try {
+    const response = await apiGet("/api/herd");
+    if (response.herd && Array.isArray(response.herd)) {
+      state.herd = response.herd;
+      debug.log("Herd data loaded", `${response.herd.length} cows`);
+    }
+  } catch (e) {
+    debug.warn("Failed to load herd data from API, using defaults", e);
+    // Keep existing state.herd as fallback
+  }
+}
+
 function renderHerdCards() {
   const search = (document.getElementById("herdSearch")?.value || "").toLowerCase();
   const filter = state.herdFilter;
@@ -259,6 +277,7 @@ function renderHerdCards() {
       <div class="hc-id">${c.id}</div>
       ${c.tag ? `<span class="hc-tag">Tag ${c.tag}</span>` : ""}
       <div class="hc-detail">${c.detail}</div>
+      ${c.last_update ? `<div style="font-size:0.65rem;color:var(--text2);margin-top:0.5rem;">Updated: ${new Date(c.last_update).toLocaleTimeString()}</div>` : ""}
     </div>
   `).join("");
 }
@@ -640,11 +659,42 @@ async function listUploadedVideos() {
           <span>${(f.size / 1024 / 1024).toFixed(2)}MB</span> ·
           <span>${new Date(f.uploaded).toLocaleString()}</span>
         </div>
-        <button class="ui-btn" onclick="selectAndProcessVideo('${escapeHtml(f.filename)}')">Process</button>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="ui-btn" onclick="selectAndProcessVideo('${escapeHtml(f.filename)}')">Process</button>
+          <button class="ui-btn ui-btn-danger" onclick="deleteVideo('${escapeHtml(f.filename)}')">Delete</button>
+        </div>
       </div>
     `).join("");
   } catch (e) {
     debug.error("Failed to list uploads", e);
+  }
+}
+
+async function deleteVideo(filename) {
+  if (!confirm(`Delete video: ${filename}?`)) return;
+  
+  try {
+    showToast("Deleting video...", "info");
+    const response = await fetch(API_BASE + `/video/delete/${encodeURIComponent(filename)}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Delete failed: ${response.status}`);
+    }
+    
+    const json = await response.json();
+    showToast(`Successfully deleted: ${filename}`, "success");
+    debug.log("Video deleted", json);
+    
+    // Refresh the list
+    listUploadedVideos();
+    
+  } catch (e) {
+    showToast(`Delete error: ${e.message}`, "error");
+    debug.error("Delete video failed", e);
   }
 }
 
@@ -1008,15 +1058,7 @@ function checkForAnomalies() {
   }
 }
 
-function addAlert(message) {
-  if (state.alerts.includes(message)) return; // Deduplicate
-  state.alerts.push({
-    id: Date.now(),
-    message: message,
-    timestamp: new Date()
-  });
-  showToast(message, "warning");
-}
+// Note: Full addAlert() defined below with level support
 
 // Style error count in red
 function updateErrorBadge() {
@@ -1030,11 +1072,11 @@ function updateErrorBadge() {
 }
 
 // Enhanced poll analysis status with new features
-const originalPollAnalysisStatus = pollAnalysisStatus;
-function enhancedPollAnalysisStatus() {
-  originalPollAnalysisStatus();
+async function enhancedPollAnalysisStatus() {
+  // Await the original async fetch so state.analysisStatus is populated before we act
+  await pollAnalysisStatus();
   
-  // Call new feature functions
+  // Now state.analysisStatus is guaranteed to be updated
   if (state.analysisStatus) {
     parseFeedType(state.analysisStatus.analysis);
     syncHerdStatus();
@@ -1046,9 +1088,6 @@ function enhancedPollAnalysisStatus() {
     updateConnectionStatus(state.backendHealthy);
   }
 }
-
-// Replace the original poll function
-window.pollAnalysisStatus = enhancedPollAnalysisStatus;
 
 // Add chat context indicator to chat input area
 function updateChatContext() {
@@ -1202,8 +1241,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderRecentSends();
   
   if (state.backendHealthy) {
-    pollAnalysisStatus();
+    // First poll immediately (enhanced version awaits fetch + runs feature hooks)
+    await enhancedPollAnalysisStatus();
     loadAnalysisLog();
+    // Also start live frame polling right away for the dashboard view
+    pollLiveFrame();
+    if (state.framePollInterval) clearInterval(state.framePollInterval);
+    state.framePollInterval = setInterval(pollLiveFrame, 3000);
   } else {
     // Demo mode: show placeholder data
     updateStatusUI({ 
@@ -1214,7 +1258,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Initial chart with historical data from the log
+  // Initial chart — will be overwritten once real data arrives
   state.chartData = [
     { frame: 90, count: 7 }, { frame: 180, count: 4 },
     { frame: 360, count: 8 }, { frame: 540, count: 3 },
@@ -1231,8 +1275,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Start polling loops (only if backend is healthy)
   if (state.backendHealthy) {
-    setInterval(pollAnalysisStatus, POLL_INTERVAL);
+    setInterval(enhancedPollAnalysisStatus, POLL_INTERVAL);
     setInterval(loadAnalysisLog, LOG_POLL_INTERVAL);
+    setInterval(loadHerdData, 10000); // Poll herd data every 10 seconds
   }
 
   // Redraw chart on resize

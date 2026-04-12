@@ -1307,6 +1307,14 @@ canvas { width: 100% !important; }
   background: #5ade8f;
   transform: translateY(-2px);
 }
+.ui-btn-danger {
+  background: var(--red);
+  color: var(--text-inv);
+}
+.ui-btn-danger:hover {
+  background: #ef4444;
+  transform: translateY(-2px);
+}
 
 .progress-bar {
   width: 100%;
