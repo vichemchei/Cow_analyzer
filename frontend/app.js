@@ -393,11 +393,11 @@ async function sendChatMsg(text) {
     const data = await apiPost("/test", { message: text });
     typing.remove();
     appendBubble("ai", data.response || "No response received.");
-    showToast("AI responded", "ok");
+    showToast("AI responded", "success");
   } catch (err) {
     typing.remove();
     appendBubble("ai", `⚠ Could not reach the backend right now.\n\nError: ${err.message}\n\nMake sure Flask is running on port 5000.`);
-    showToast("Backend unreachable", "err");
+    showToast("Backend unreachable", "error");
   }
 
   state.chatIsLoading = false;
@@ -451,20 +451,20 @@ function handleChatKey(e) {
 }
 
 function autoResize(el) {
-  el.style.height = "auto";
-  el.style.height = Math.min(el.scrollHeight, 140) + "px";
+  // No-op: height controlled via CSS min-height & max-height to prevent flicker
+  // Textarea has: min-height: 40px; max-height: 140px; overflow-y: auto;
 }
 
 // Quick action shortcut
 function quickChat(question) {
-  setView("chat", document.querySelector("[data-view=chat]"));
+  setView("chat", document.querySelector('[data-view="chat"]'));
   setTimeout(() => sendChatMsg(question), 100);
 }
 
 // ─── POST /send — SMS ─────────────────────────────────────────
 async function previewAI() {
   const msg = document.getElementById("smsMessage").value.trim();
-  if (!msg) { showToast("Enter a message first", "err"); return; }
+  if (!msg) { showToast("Enter a message first", "error"); return; }
 
   const preview = document.getElementById("aiPreviewBox");
   const wrap = document.getElementById("aiPreviewWrap");
@@ -501,7 +501,7 @@ async function sendSMS() {
     const data = await apiPost("/send", { recipients, message, use_ai });
     feedback.textContent = `✓ Sent to ${data.recipients?.join(", ") || recipients}`;
     feedback.className = "sms-feedback ok";
-    showToast("SMS sent successfully", "ok");
+    showToast("SMS sent successfully", "success");
 
     // Track in recent sends
     state.recentSends.unshift({
@@ -517,7 +517,7 @@ async function sendSMS() {
   } catch (err) {
     feedback.textContent = `⚠ Failed: ${err.message}`;
     feedback.className = "sms-feedback err";
-    showToast("SMS send failed", "err");
+    showToast("SMS send failed", "error");
   }
 
   btn.disabled = false;
@@ -608,17 +608,7 @@ function openConversation(phone) {
   `;
 }
 
-// ─── POST /conversations/clear ────────────────────────────────
-async function clearConversations() {
-  try {
-    await apiPost("/conversations/clear", {});
-    state.conversations = {};
-    showToast("Conversation history cleared", "success");
-    loadConversations();
-  } catch (e) {
-    showToast("Failed to clear history", "error");
-  }
-}
+// Note: clearConversations() is defined below with confirm() dialog - that's the version to use
 
 // ═══════════════════════════════════════════════════════════════
 // ─── VIDEO SOURCE MANAGEMENT ──────────────────────────────────
@@ -839,6 +829,334 @@ if (uploadArea) {
     }
   });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ─── NEW FEATURES: Live Frame, Health Tracking, Notifications ──
+// ═══════════════════════════════════════════════════════════════
+
+// Add to state
+state.lastSuccessfulAnalysis = null;
+state.consecutiveErrors = 0;
+state.feedType = "—";
+state.feedTime = "—";
+state.alerts = [];
+state.lastFramePoolTime = 0;
+
+// Live frame viewer - poll every 3 seconds
+function pollLiveFrame() {
+  const now = Date.now();
+  if (now - state.lastFramePoolTime < 3000) return; // Skip if polled recently
+  
+  state.lastFramePoolTime = now;
+  
+  fetch(API_BASE + "/video/current-frame")
+    .then(r => {
+      if (r.ok) return r.blob();
+      throw new Error("No frame");
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const img = document.getElementById("liveFrameImg");
+      img.src = url;
+      img.style.display = "block";
+      document.getElementById("frameNotAvailable").style.display = "none";
+    })
+    .catch(() => {
+      document.getElementById("liveFrameImg").style.display = "none";
+      document.getElementById("frameNotAvailable").style.display = "flex";
+    });
+}
+
+// Update live frame analysis text
+function updateLiveFrameAnalysis() {
+  if (state.analysisStatus) {
+    document.getElementById("frameAnalysis").textContent = 
+      state.analysisStatus.analysis || "—";
+  }
+}
+
+// Parse feed type from analysis text
+function parseFeedType(analysisText) {
+  if (!analysisText) return;
+  const patterns = [
+    /hay/i, /silage/i, /fodder/i, /green feed/i, 
+    /grain/i, /concentrate/i, /pasture/i
+  ];
+  for (const pattern of patterns) {
+    const match = analysisText.match(pattern);
+    if (match) {
+      state.feedType = match[0].toLowerCase();
+      state.feedTime = new Date().toLocaleTimeString("en-GB", { hour12: false });
+      document.getElementById("feedType").textContent = state.feedType;
+      document.getElementById("feedTime").textContent = state.feedTime;
+      return;
+    }
+  }
+}
+
+// Auto-sync herd status from analysis
+function syncHerdStatus() {
+  if (!state.analysisStatus || !state.analysisStatus.analysis) return;
+  
+  const text = state.analysisStatus.analysis;
+  const cowPattern = /Cow\s*(\d+)[:\s]+(\w+)/gi;
+  let match;
+  
+  while ((match = cowPattern.exec(text)) !== null) {
+    const cowNum = parseInt(match[1]);
+    const status = match[2].toLowerCase();
+    
+    // Find cow in state.herd
+    const cow = state.herd.find(c => {
+      const id = parseInt(c.id.match(/\d+$/)?.[0] || "0");
+      return id === cowNum;
+    });
+    
+    if (cow) {
+      cow.status = status.includes("eat") ? "eating" : "idle";
+      cow.detail = status.includes("eat") ? `${state.feedType || 'hay'}` : "Standing";
+    }
+  }
+  
+  // Update UI
+  if (document.getElementById("view-herd")?.classList.contains("active")) {
+    renderHerdCards();
+  }
+  renderMiniHerd();
+}
+
+// Track analysis errors for health indicator
+function updateHealthStatus() {
+  const now = new Date();
+  if (!state.analysisStatus) return;
+  
+  const analysis = state.analysisStatus.analysis || "";
+  const isError = analysis.includes("Analysis error");
+  const timestamp = state.analysisStatus.timestamp;
+  
+  if (!isError) {
+    state.lastSuccessfulAnalysis = now;
+    state.consecutiveErrors = 0;
+  } else {
+    state.consecutiveErrors++;
+  }
+  
+  // Update health UI
+  const healthDot = document.getElementById("healthDot");
+  const healthMsg = document.getElementById("healthMsg");
+  const healthStatus = document.getElementById("healthStatus");
+  const errorBanner = document.querySelector("#feedTrackingCard [id='errorBanner']");
+  
+  if (state.lastSuccessfulAnalysis) {
+    const timeDiff = now - state.lastSuccessfulAnalysis;
+    const minSince = Math.floor(timeDiff / 60000);
+    
+    healthDot.classList.remove("error");
+    healthMsg.classList.remove("error");
+    
+    if (minSince > 5) {
+      healthDot.classList.add("error");
+      healthMsg.classList.add("error");
+      healthMsg.textContent = `No successful analysis for ${minSince} minutes`;
+      if (errorBanner) errorBanner.style.display = "block";
+    } else {
+      healthMsg.classList.remove("error");
+      healthMsg.textContent = `${minSince}m ago`;
+      if (errorBanner) errorBanner.style.display = "none";
+    }
+    
+    document.getElementById("lastSuccessTime").textContent = 
+      state.lastSuccessfulAnalysis.toLocaleTimeString("en-GB", { hour12: false });
+  }
+}
+
+// Connection status banner
+let isConnected = true;
+function updateConnectionStatus(healthy) {
+  const banner = document.getElementById("connectionBanner");
+  if (healthy && !isConnected) {
+    // Reconnected
+    banner.style.display = "none";
+    isConnected = true;
+    showToast("Connection restored", "success");
+  } else if (!healthy && isConnected) {
+    // Lost connection
+    banner.style.display = "flex";
+    isConnected = false;
+  }
+}
+
+// Add alerts for anomalies
+function checkForAnomalies() {
+  if (!state.analysisStatus) return;
+  
+  // Cow count drops by >50%
+  if (state.lastCowCount) {
+    const current = parseInt(state.analysisStatus.analysis.match(/(\d+)\s+cow/i)?.[1] || "0");
+    if (current > 0 && state.lastCowCount > 0) {
+      const drop = ((state.lastCowCount - current) / state.lastCowCount) * 100;
+      if (drop > 50) {
+        addAlert("🚨 Cow count dropped by " + Math.round(drop) + "%");
+      }
+    }
+    state.lastCowCount = current;
+  }
+  
+  // 5+ consecutive errors
+  if (state.consecutiveErrors >= 5) {
+    addAlert("❌ 5 consecutive analysis errors detected");
+  }
+}
+
+function addAlert(message) {
+  if (state.alerts.includes(message)) return; // Deduplicate
+  state.alerts.push({
+    id: Date.now(),
+    message: message,
+    timestamp: new Date()
+  });
+  showToast(message, "warning");
+}
+
+// Style error count in red
+function updateErrorBadge() {
+  const errorCount = parseInt(document.getElementById("tbErrVal").textContent);
+  const element = document.getElementById("tbErrVal");
+  if (errorCount > 0) {
+    element.classList.add("error");
+  } else {
+    element.classList.remove("error");
+  }
+}
+
+// Enhanced poll analysis status with new features
+const originalPollAnalysisStatus = pollAnalysisStatus;
+function enhancedPollAnalysisStatus() {
+  originalPollAnalysisStatus();
+  
+  // Call new feature functions
+  if (state.analysisStatus) {
+    parseFeedType(state.analysisStatus.analysis);
+    syncHerdStatus();
+    updateHealthStatus();
+    updateErrorBadge();
+    checkForAnomalies();
+    updateLiveFrameAnalysis();
+    pollLiveFrame();
+    updateConnectionStatus(state.backendHealthy);
+  }
+}
+
+// Replace the original poll function
+window.pollAnalysisStatus = enhancedPollAnalysisStatus;
+
+// Add chat context indicator to chat input area
+function updateChatContext() {
+  let contextHTML = "—";
+  if (state.analysisStatus) {
+    const ts = state.analysisStatus.timestamp ? 
+      new Date(state.analysisStatus.timestamp).toLocaleTimeString("en-GB") : "—";
+    const frame = state.analysisStatus.frame_count || "—";
+    const cowMatch = state.analysisStatus.analysis.match(/(\d+)\s+cow/i);
+    const cows = cowMatch ? cowMatch[1] : "—";
+    contextHTML = `Using data from ${ts} · Frame ${frame} · ${cows} cows`;
+  }
+  
+  const contextEl = document.querySelector(".chat-context");
+  if (contextEl) {
+    contextEl.innerHTML = contextHTML;
+    contextEl.style.display = "block";
+  }
+}
+
+// ─── Alert System ────────────────────────────────────────────
+function addAlert(message, level = "info") {
+  // Deduplicate alerts
+  if (state.alerts.some(a => a.message === message)) return;
+  
+  state.alerts.unshift({
+    message: message,
+    level: level,
+    timestamp: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+  });
+  
+  // Keep last 20 alerts
+  if (state.alerts.length > 20) state.alerts.pop();
+  
+  renderAlerts();
+  updateAlertCount();
+}
+
+function renderAlerts() {
+  const list = document.getElementById("alertsList");
+  if (!list) return;
+  
+  if (!state.alerts.length) {
+    list.innerHTML = `<div class="alerts-empty">No alerts</div>`;
+    return;
+  }
+  
+  list.innerHTML = state.alerts.map(alert => `
+    <div class="alert-item ${alert.level}">
+      <div style="font-weight:500;">${alert.message}</div>
+      <div style="font-size:0.7rem;color:var(--text3);margin-top:0.3rem;">${alert.timestamp}</div>
+    </div>
+  `).join("");
+}
+
+function updateAlertCount() {
+  const count = state.alerts.length;
+  document.getElementById("alertCount").textContent = count || "0";
+}
+
+function toggleAlertsDropdown() {
+  const panel = document.getElementById("alertsPanel");
+  if (panel.style.display === "none") {
+    panel.style.display = "block";
+    renderAlerts();
+  } else {
+    panel.style.display = "none";
+  }
+}
+
+function clearAllAlerts() {
+  state.alerts = [];
+  renderAlerts();
+  updateAlertCount();
+  showToast("Alerts cleared", "info");
+}
+
+// Close alerts dropdown when clicking elsewhere
+document.addEventListener("click", function(event) {
+  const dropdown = document.getElementById("alertsDropdown");
+  const btn = document.getElementById("alertsBtn");
+  if (dropdown && btn && !dropdown.contains(event.target) && !btn.contains(event.target)) {
+    document.getElementById("alertsPanel").style.display = "none";
+  }
+});
+
+// Initialize new features on DOM ready
+document.addEventListener("DOMContentLoaded", () => {
+  // Set initial state
+  state.analysisLogInterval = null;
+  state.lastCowCount = 0;
+  state.consecutiveErrors = 0;
+  state.framesAnalyzed = 0;
+  
+  // Ensure pollLiveFrame runs when dashboard is active
+  const originalSetView = window.setView;
+  window.setView = function(name, btn) {
+    originalSetView(name, btn);
+    if (name === "dashboard") {
+      pollLiveFrame();
+      // Poll frame every 3 seconds when dashboard is active
+      if (state.framePollInterval) clearInterval(state.framePollInterval);
+      state.framePollInterval = setInterval(pollLiveFrame, 3000);
+    } else {
+      if (state.framePollInterval) clearInterval(state.framePollInterval);
+    }
+  };
+});
 async function clearConversations() {
   if (!confirm("Clear all conversation history?")) return;
   try {
@@ -847,9 +1165,9 @@ async function clearConversations() {
     loadConversations();
     document.getElementById("convThread").innerHTML =
       `<div class="conv-thread-empty">Conversation history cleared.</div>`;
-    showToast("History cleared", "ok");
+    showToast("History cleared", "success");
   } catch {
-    showToast("Failed to clear history", "err");
+    showToast("Failed to clear history", "error");
   }
 }
 
