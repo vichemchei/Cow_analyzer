@@ -1,7 +1,9 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 from at import SMS
 from chat_interface import FarmerChatInterface
+from video_processor import video_processor
 from datetime import datetime
 import logging
 import os
@@ -9,6 +11,14 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# File upload configuration
+UPLOAD_FOLDER = "uploads"
+ALLOWED_EXTENSIONS = {"mp4", "avi", "mov", "mkv"}
+MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 app = Flask(__name__, static_folder="frontend", template_folder="frontend")
 CORS(app)  # Allow frontend dev server during development
@@ -303,6 +313,175 @@ def _send_reply(phone_number, message):
 
 @app.errorhandler(404)
 def not_found(_): return jsonify({"error": "Endpoint not found"}), 404
+# ─── API: Video Upload and Processing ───────────────────────────────────────
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.route("/video/upload", methods=["POST"])
+def upload_video():
+    """Upload a video file for analysis"""
+    try:
+        # Check if file is in request
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files["file"]
+        if file.filename == "":
+            return jsonify({"error": "No file selected"}), 400
+        
+        # Check file extension
+        if not allowed_file(file.filename):
+            return jsonify({
+                "error": f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            }), 400
+        
+        # Check file size
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > MAX_FILE_SIZE:
+            return jsonify({
+                "error": f"File too large. Max size: {MAX_FILE_SIZE // 1024 // 1024}MB"
+            }), 400
+        
+        # Save file
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        logger.info(f"Video uploaded: {filename}")
+        
+        return jsonify({
+            "status": "success",
+            "filename": filename,
+            "filepath": filepath,
+            "size": file_size,
+            "message": "Video uploaded successfully. Ready to process."
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"/video/upload error: {e}")
+        return jsonify({"error": str(e)[:100]}), 500
+
+
+@app.route("/video/process", methods=["POST"])
+def process_video():
+    """Start video processing with AI analysis"""
+    try:
+        data = request.get_json() if request.is_json else {}
+        source = data.get("source", "").lower()  # "file" or "webcam"
+        filename = data.get("filename", "")
+        duration = data.get("duration", 60)  # seconds for webcam
+        
+        if source not in ["file", "webcam"]:
+            return jsonify({"error": "source must be 'file' or 'webcam'"}), 400
+        
+        if video_processor.is_processing:
+            return jsonify({
+                "status": "already_processing",
+                "message": "Video is already being processed"
+            }), 400
+        
+        if source == "file":
+            if not filename:
+                return jsonify({"error": "filename required for file source"}), 400
+            
+            filepath = os.path.join(UPLOAD_FOLDER, secure_filename(filename))
+            if not os.path.exists(filepath):
+                return jsonify({"error": f"File not found: {filename}"}), 404
+            
+            # Start processing in background
+            success = video_processor.start_video_processing(filepath)
+            if not success:
+                return jsonify({"error": "Could not start processing"}), 400
+            
+            return jsonify({
+                "status": "processing_started",
+                "source": "file",
+                "filename": filename,
+                "message": "Video processing started"
+            }), 200
+        
+        elif source == "webcam":
+            # Start webcam processing in background
+            success = video_processor.start_webcam_processing(duration)
+            if not success:
+                return jsonify({"error": "Could not start processing"}), 400
+            
+            return jsonify({
+                "status": "processing_started",
+                "source": "webcam",
+                "duration": duration,
+                "message": f"Webcam processing started for {duration} seconds"
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"/video/process error: {e}")
+        return jsonify({"error": str(e)[:100]}), 500
+
+
+@app.route("/video/status", methods=["GET"])
+def video_status():
+    """Get current video processing status"""
+    try:
+        status = video_processor.get_status()
+        return jsonify(status), 200
+    except Exception as e:
+        logger.error(f"/video/status error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/video/stop", methods=["POST"])
+def stop_video():
+    """Stop ongoing video processing"""
+    try:
+        success = video_processor.stop_processing()
+        return jsonify({
+            "status": "success" if success else "error",
+            "message": "Video processing stopped" if success else "No processing to stop"
+        }), 200
+    except Exception as e:
+        logger.error(f"/video/stop error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/video/current-frame", methods=["GET"])
+def get_current_frame():
+    """Get the current frame from video processing"""
+    try:
+        if os.path.exists("current_frame.jpg"):
+            return send_from_directory(".", "current_frame.jpg")
+        return jsonify({"error": "No frame available"}), 404
+    except Exception as e:
+        logger.error(f"/video/current-frame error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/video/list-uploads", methods=["GET"])
+def list_uploads():
+    """List all uploaded video files"""
+    try:
+        if not os.path.exists(UPLOAD_FOLDER):
+            return jsonify({"files": []}), 200
+        
+        files = []
+        for filename in os.listdir(UPLOAD_FOLDER):
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.isfile(filepath):
+                files.append({
+                    "filename": filename,
+                    "size": os.path.getsize(filepath),
+                    "uploaded": datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()
+                })
+        
+        return jsonify({"files": files}), 200
+    except Exception as e:
+        logger.error(f"/video/list-uploads error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(500)
 def server_error(_): return jsonify({"error": "Internal server error"}), 500

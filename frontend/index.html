@@ -20,6 +20,9 @@
   <button class="nav-item active" data-view="dashboard" onclick="setView('dashboard',this)">
     <span class="nav-icon">⬡</span> Dashboard
   </button>
+  <button class="nav-item" data-view="video-source" onclick="setView('video-source',this)">
+    <span class="nav-icon">📹</span> Video Source
+  </button>
   <button class="nav-item" data-view="analysis" onclick="setView('analysis',this)">
     <span class="nav-icon">◈</span> AI Analysis
   </button>
@@ -140,6 +143,81 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ VIEW: VIDEO SOURCE ═ -->
+  <div class="view" id="view-video-source">
+    <div class="video-container">
+      <!-- Video Upload Section -->
+      <div class="card card-video-upload">
+        <div class="card-eyebrow">Upload Video</div>
+        <div class="card-title">Select Video File</div>
+        <div class="video-upload-area" id="videoUploadArea">
+          <input type="file" id="videoFileInput" accept=".mp4,.avi,.mov,.mkv" style="display:none;" onchange="handleVideoFileSelect()"/>
+          <button class="upload-btn" onclick="document.getElementById('videoFileInput').click()">
+            <span class="upload-icon">📁</span>
+            <span>Choose Video File</span>
+          </button>
+          <p class="upload-hint">or drag and drop your video here</p>
+          <div class="file-info" id="fileInfo" style="display:none;">
+            <div class="fi-name" id="fileName">—</div>
+            <div class="fi-size" id="fileSize">—</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="uploadBtn" style="display:none;" onclick="uploadVideo()">Upload & Process</button>
+        <div class="progress-bar" id="uploadProgress" style="display:none;">
+          <div class="pb-fill" id="pbFill"></div>
+          <span class="pb-text" id="pbText">0%</span>
+        </div>
+      </div>
+
+      <!-- Webcam Section -->
+      <div class="card card-webcam">
+        <div class="card-eyebrow">Webcam Feed</div>
+        <div class="card-title">Use Live Camera</div>
+        <div class="webcam-preview" id="webcamPreview">
+          <canvas id="webcamCanvas" style="width:100%;border-radius:8px;"></canvas>
+        </div>
+        <div class="webcam-controls">
+          <div class="wc-duration">
+            <label>Duration (seconds)</label>
+            <input type="number" id="webcamDuration" value="60" min="10" max="600" class="wc-input"/>
+          </div>
+          <button class="btn btn-primary" id="startWebcamBtn" onclick="startWebcamCapture()">Start Webcam</button>
+          <button class="btn btn-danger" id="stopWebcamBtn" style="display:none;" onclick="stopWebcamCapture()">Stop Webcam</button>
+        </div>
+      </div>
+
+      <!-- Processing Status -->
+      <div class="card card-processing-status">
+        <div class="card-eyebrow">Processing Status</div>
+        <div class="card-title">Current Analysis</div>
+        <div class="status-info">
+          <div class="si-row">
+            <span class="si-key">Status</span>
+            <span class="si-val" id="procStatus">Idle</span>
+          </div>
+          <div class="si-row">
+            <span class="si-key">Frames Processed</span>
+            <span class="si-val" id="procFrames">0</span>
+          </div>
+          <div class="si-row">
+            <span class="si-key">Latest Analysis</span>
+            <span class="si-val" id="procAnalysis">—</span>
+          </div>
+        </div>
+        <button class="btn btn-danger" onclick="stopVideoProcessing()" style="width:100%;margin-top:1rem;">Stop All Processing</button>
+      </div>
+
+      <!-- Previous Uploads -->
+      <div class="card card-uploads-list">
+        <div class="card-eyebrow">Previous Uploads</div>
+        <div class="card-title">Uploaded Videos</div>
+        <div class="uploads-list" id="uploadsList">
+          <p style="color:#666;font-size:0.9rem;">Loading uploads...</p>
+        </div>
+      </div>
     </div>
   </div>
 

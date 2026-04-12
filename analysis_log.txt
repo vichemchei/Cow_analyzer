@@ -9531,3 +9531,144 @@ Feed: Hay or dry fodder
 - Cow 3: Eating.
 - Cow 4: Eating.
 - Feed: Hay/silage.
+2026-04-09 15:00:58 - FRAME 90: - Cow 1: Eating
+- Cow 2: Eating
+- Cow 3: Eating
+- Cow 4: Eating
+- Cow 5: Eating
+
+Feed: Hay or dried grass
+2026-04-09 15:01:23 - FRAME 180: - Cow 1: Eating
+- Cow 2: Eating
+- Cow 3: Eating
+- Cow 4: Eating
+
+Feed: Hay or silage
+2026-04-09 15:01:51 - FRAME 270: - Cow 1: Eating
+- Cow 2: Eating
+- Cow 3: Eating
+- Cow 4: Eating
+
+Feed: Hay or silage
+2026-04-09 15:02:19 - FRAME 360: - Multiple cows detected.
+- Each cow is eating.
+- Feed identified: Hay.
+2026-04-09 15:02:44 - FRAME 450: - There are four cows in the image.
+- Cow 1: Eating
+- Cow 2: Eating
+- Cow 3: Eating
+- Cow 4: Eating
+
+Feed: Hay/Silage
+2026-04-09 15:03:12 - FRAME 540: - Cow 1: Eating
+- Cow 2: Eating
+- Cow 3: Eating
+
+Feed: Hay/silage
+2026-04-10 10:29:44 - FRAME 2: Cow 1: Eating, feed type is hay.  
+Cow 2: Eating, feed type is hay.  
+Cow 3: Eating, feed type is hay.  
+Cow 4: Eating, feed type is hay.  
+Cow 5: Eating, feed type is hay.  
+Cow 6: Eating, feed type is hay.
+2026-04-10 10:29:51 - FRAME 4: Cow 1: Eating, dry hay.  
+Cow 2: Eating, dry hay.  
+Cow 3: Eating, dry hay.  
+Cow 4: Eating, dry hay.  
+Cow 5: Eating, dry hay.
+2026-04-10 10:29:57 - FRAME 6: Cow 1: Eating (hay/straw).  
+Cow 2: Eating (hay/straw).  
+Cow 3: Eating (hay/straw).  
+Cow 4: Eating (hay/straw).  
+Cow 5: Eating (hay/straw).
+2026-04-10 10:30:04 - FRAME 8: Cow 1: Eating, feed type is hay.  
+Cow 2: Eating, feed type is hay.  
+Cow 3: Eating, feed type is hay.  
+Cow 4: Eating, feed type is hay.  
+Cow 5: Eating, feed type is hay.  
+Cow 6: Eating, feed type is hay.  
+Cow 7: Eating, feed type is hay.
+2026-04-10 11:09:00 - FRAME 2: Cow 1: Eating, feed type is hay.  
+Cow 2: Eating, feed type is hay.  
+Cow 3: Eating, feed type is hay.  
+Cow 4: Eating, feed type is hay.  
+Cow 5: Eating, feed type is hay.
+2026-04-10 11:09:14 - FRAME 4: Cow 1: Eating, feed type is hay/straw.
+Cow 2: Eating, feed type is hay/straw.
+Cow 3: Eating, feed type is hay/straw.
+Cow 4: Eating, feed type is hay/straw.
+Cow 5: Eating, feed type is hay/straw.
+2026-04-10 11:09:20 - FRAME 6: Cow 1: Eating, feed type is hay.  
+Cow 2: Eating, feed type is hay.  
+Cow 3: Eating, feed type is hay.  
+Cow 4: Eating, feed type is hay.  
+Cow 5: Eating, feed type is hay.  
+Cow 6: Eating, feed type is hay.
+2026-04-10 11:09:30 - FRAME 8: Cow 1: Eating, feed type is hay/straw.
+Cow 2: Eating, feed type is hay/straw.
+Cow 3: Eating, feed type is hay/straw.
+Cow 4: Eating, feed type is hay/straw.
+Cow 5: Eating, feed type is hay/straw.
+2026-04-10 11:09:37 - FRAME 10: Cow 1: Eating, dry hay.  
+Cow 2: Eating, dry hay.  
+Cow 3: Eating, dry hay.  
+Cow 4: Eating, dry hay.  
+Cow 5: Eating, dry hay.  
+Cow 6: Eating, dry hay.
+2026-04-10 11:09:43 - FRAME 12: Cow 1: Eating, feed type is hay.  
+Cow 2: Eating, feed type is hay.  
+Cow 3: Eating, feed type is hay.  
+Cow 4: Eating, feed type is hay.  
+Cow 5: Eating, feed type is hay.  
+Cow 6: Standing.
+2026-04-10 11:09:49 - FRAME 14: Cow 1: Eating, hay. Cow 2: Eating, hay. Cow 3: Eating, hay. Cow 4: Eating, hay. Cow 5: Eating, hay. Cow 6: Eating, hay.
+2026-04-10 11:09:56 - FRAME 16: Cow 1: Eating, hay. Cow 2: Eating, hay. Cow 3: Eating, hay. Cow 4: Eating, hay. Cow 5: Eating, hay. Cow 6: Eating, hay.
+2026-04-10 11:10:02 - FRAME 18: Cow 1: Eating, hay. Cow 2: Eating, hay. Cow 3: Eating, hay. Cow 4: Eating, hay. Cow 5: Eating, hay. Cow 6: Eating, hay. Cow 7: Eating, hay.
+2026-04-10 11:10:09 - FRAME 20: Cow 1: Eating (hay/straw).  
+Cow 2: Eating (hay/straw).  
+Cow 3: Eating (hay/straw).  
+Cow 4: Eating (hay/straw).  
+Cow 5: Eating (hay/straw).  
+Cow 6: Eating (hay/straw).  
+Cow 7: Eating (hay/straw).
+2026-04-10 11:12:15 - FRAME 2: Cow 1: Eating, feed type is hay.  
+Cow 2: Eating, feed type is hay.  
+Cow 3: Eating, feed type is hay.  
+Cow 4: Eating, feed type is hay.  
+Cow 5: Eating, feed type is hay.
+2026-04-10 11:12:21 - FRAME 4: Cow 1: Eating, feed type is hay.  
+Cow 2: Eating, feed type is hay.  
+Cow 3: Eating, feed type is hay.  
+Cow 4: Eating, feed type is hay.  
+Cow 5: Eating, feed type is hay.  
+Cow 6: Eating, feed type is hay.
+2026-04-10 11:12:27 - FRAME 6: Cow 1: Eating (hay/straw).  
+Cow 2: Eating (hay/straw).  
+Cow 3: Eating (hay/straw).  
+Cow 4: Eating (hay/straw).  
+Cow 5: Eating (hay/straw).
+2026-04-10 11:12:34 - FRAME 8: Cow 1: Eating, feed type is hay/straw.
+Cow 2: Eating, feed type is hay/straw.
+Cow 3: Eating, feed type is hay/straw.
+Cow 4: Eating, feed type is hay/straw.
+Cow 5: Eating, feed type is hay/straw.
+Cow 6: Eating, feed type is hay/straw.
+2026-04-10 11:12:41 - FRAME 10: Cow 1: Eating, dry fodder.  
+Cow 2: Eating, dry fodder.  
+Cow 3: Eating, dry fodder.  
+Cow 4: Eating, dry fodder.  
+Cow 5: Eating, dry fodder.  
+Cow 6: Eating, dry fodder.
+2026-04-10 11:12:48 - FRAME 12: Cow 1: Eating, feed type is hay.  
+Cow 2: Eating, feed type is hay.  
+Cow 3: Eating, feed type is hay.  
+Cow 4: Eating, feed type is hay.  
+Cow 5: Eating, feed type is hay.  
+Cow 6: Standing.
+2026-04-10 11:12:58 - FRAME 14: Cow 1: Eating, dry fodder.  
+Cow 2: Eating, dry fodder.  
+Cow 3: Eating, dry fodder.  
+Cow 4: Eating, dry fodder.  
+Cow 5: Eating, dry fodder.  
+Cow 6: Eating, dry fodder.  
+Cow 7: Eating, dry fodder.

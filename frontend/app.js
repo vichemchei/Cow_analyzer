@@ -114,9 +114,10 @@ updateClock();
 // ─── View routing ─────────────────────────────────────────────
 const viewMeta = {
   dashboard: { title: "Dashboard", crumb: "Overview · Live" },
-  analysis: { title: "AI Analysis", crumb: "Gemini · Frame Log" },
+  "video-source": { title: "Video Source", crumb: "Upload · Webcam · Processing" },
+  analysis: { title: "AI Analysis", crumb: "Azure OpenAI · Frame Log" },
   herd: { title: "Herd", crumb: "Individual Cows · Status" },
-  chat: { title: "AI Chat", crumb: "Gemini · Farmer Assistant" },
+  chat: { title: "AI Chat", crumb: "Azure OpenAI · Farmer Assistant" },
   sms: { title: "SMS Center", crumb: "Africa's Talking · Compose" },
   conversations: { title: "Conversations", crumb: "SMS · Incoming Threads" },
 };
@@ -134,6 +135,7 @@ function setView(name, btn) {
   document.getElementById("breadcrumb").textContent = meta.crumb || "";
 
   // Trigger data loads on view switch
+  if (name === "video-source") loadVideoSourceView();
   if (name === "analysis") loadAnalysisLog();
   if (name === "conversations") loadConversations();
   if (name === "herd") renderHerdCards();
@@ -607,6 +609,236 @@ function openConversation(phone) {
 }
 
 // ─── POST /conversations/clear ────────────────────────────────
+async function clearConversations() {
+  try {
+    await apiPost("/conversations/clear", {});
+    state.conversations = {};
+    showToast("Conversation history cleared", "success");
+    loadConversations();
+  } catch (e) {
+    showToast("Failed to clear history", "error");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ─── VIDEO SOURCE MANAGEMENT ──────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+let selectedFile = null;
+let webcamStream = null;
+let webcamInterval = null;
+
+async function loadVideoSourceView() {
+  listUploadedVideos();
+  pollVideoStatus();
+}
+
+async function listUploadedVideos() {
+  try {
+    const response = await apiGet("/video/list-uploads");
+    const uploadsList = document.getElementById("uploadsList");
+    
+    if (!response.files || response.files.length === 0) {
+      uploadsList.innerHTML = "<p style=\"color:#666;font-size:0.9rem;\">No uploaded videos yet</p>";
+      return;
+    }
+    
+    uploadsList.innerHTML = response.files.map(f => `
+      <div class="upload-item">
+        <div class="ui-name">${escapeHtml(f.filename)}</div>
+        <div class="ui-meta">
+          <span>${(f.size / 1024 / 1024).toFixed(2)}MB</span> ·
+          <span>${new Date(f.uploaded).toLocaleString()}</span>
+        </div>
+        <button class="ui-btn" onclick="selectAndProcessVideo('${escapeHtml(f.filename)}')">Process</button>
+      </div>
+    `).join("");
+  } catch (e) {
+    debug.error("Failed to list uploads", e);
+  }
+}
+
+function handleVideoFileSelect() {
+  const input = document.getElementById("videoFileInput");
+  const file = input.files[0];
+  
+  if (!file) return;
+  
+  selectedFile = file;
+  document.getElementById("fileInfo").style.display = "block";
+  document.getElementById("fileName").textContent = file.name;
+  document.getElementById("fileSize").textContent = `${(file.size / 1024 / 1024).toFixed(2)}MB`;
+  document.getElementById("uploadBtn").style.display = "block";
+}
+
+async function uploadVideo() {
+  if (!selectedFile) {
+    showToast("No file selected", "error");
+    return;
+  }
+  
+  try {
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    
+    document.getElementById("uploadProgress").style.display = "block";
+    
+    const response = await fetch(API_BASE + "/video/upload", {
+      method: "POST",
+      body: formData,
+    });
+    
+    if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+    
+    const json = await response.json();
+    showToast("Video uploaded successfully!", "success");
+    
+    // Start processing
+    await apiPost("/video/process", {
+      source: "file",
+      filename: json.filename,
+    });
+    
+    showToast("Processing started", "success");
+    selectedFile = null;
+    document.getElementById("videoFileInput").value = "";
+    document.getElementById("fileInfo").style.display = "none";
+    document.getElementById("uploadBtn").style.display = "none";
+    document.getElementById("uploadProgress").style.display = "none";
+    
+    // Poll for status
+    pollVideoStatus();
+    listUploadedVideos();
+    
+  } catch (e) {
+    showToast(`Upload error: ${e.message}`, "error");
+    debug.error("Upload failed", e);
+  }
+}
+
+async function selectAndProcessVideo(filename) {
+  try {
+    showToast("Starting video processing...", "info");
+    await apiPost("/video/process", {
+      source: "file",
+      filename: filename,
+    });
+    showToast("Processing started", "success");
+    pollVideoStatus();
+  } catch (e) {
+    showToast(`Processing error: ${e.message}`, "error");
+  }
+}
+
+async function startWebcamCapture() {
+  try {
+    const duration = parseInt(document.getElementById("webcamDuration").value) || 60;
+    
+    // Request camera access
+    webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const video = document.createElement("video");
+    video.srcObject = webcamStream;
+    video.play();
+    
+    // Get canvas
+    const canvas = document.getElementById("webcamCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = 640;
+    canvas.height = 480;
+    
+    // Draw frames
+    webcamInterval = setInterval(() => {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }, 100);
+    
+    // Start backend processing
+    await apiPost("/video/process", {
+      source: "webcam",
+      duration: duration,
+    });
+    
+    document.getElementById("startWebcamBtn").style.display = "none";
+    document.getElementById("stopWebcamBtn").style.display = "block";
+    showToast("Webcam capture started", "success");
+    pollVideoStatus();
+    
+  } catch (e) {
+    showToast(`Webcam error: ${e.message}`, "error");
+    debug.error("Webcam capture failed", e);
+  }
+}
+
+async function stopWebcamCapture() {
+  try {
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(track => track.stop());
+      webcamStream = null;
+    }
+    if (webcamInterval) {
+      clearInterval(webcamInterval);
+      webcamInterval = null;
+    }
+    
+    await stopVideoProcessing();
+    
+    document.getElementById("startWebcamBtn").style.display = "block";
+    document.getElementById("stopWebcamBtn").style.display = "none";
+    showToast("Webcam stopped", "info");
+    
+  } catch (e) {
+    debug.error("Stop webcam error", e);
+  }
+}
+
+async function stopVideoProcessing() {
+  try {
+    await apiPost("/video/stop", {});
+    showToast("Video processing stopped", "info");
+    pollVideoStatus();
+  } catch (e) {
+    debug.error("Stop video processing error", e);
+  }
+}
+
+async function pollVideoStatus() {
+  try {
+    const status = await apiGet("/video/status");
+    
+    document.getElementById("procStatus").textContent = status.status || "idle";
+    document.getElementById("procFrames").textContent = status.frame_count || "0";
+    document.getElementById("procAnalysis").textContent = (status.latest_analysis || "—").substring(0, 100);
+    
+    if (status.is_processing) {
+      setTimeout(pollVideoStatus, 2000);
+    }
+  } catch (e) {
+    debug.warn("Video status poll failed", e);
+  }
+}
+
+// Drag and drop for video upload
+const uploadArea = document.getElementById("videoUploadArea");
+if (uploadArea) {
+  uploadArea.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadArea.style.borderColor = "var(--accent)";
+  });
+  
+  uploadArea.addEventListener("dragleave", () => {
+    uploadArea.style.borderColor = "var(--border)";
+  });
+  
+  uploadArea.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadArea.style.borderColor = "var(--border)";
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      document.getElementById("videoFileInput").files = files;
+      handleVideoFileSelect();
+    }
+  });
+}
 async function clearConversations() {
   if (!confirm("Clear all conversation history?")) return;
   try {
