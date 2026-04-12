@@ -1,7 +1,11 @@
 Flask==2.3.2
 flask-cors==4.0.0
+flask-limiter==3.5.0
 python-dotenv==1.0.0
 langchain==0.1.0
 langchain-openai==0.1.0
+langchain-community==0.0.20
 openai>=1.0.0
 opencv-python==4.8.0.76
+faiss-cpu==1.7.4
+africas-talking

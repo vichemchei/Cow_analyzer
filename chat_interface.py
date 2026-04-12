@@ -56,8 +56,26 @@ class FarmerChatInterface:
         return {}
     
     def _save_cache(self):
-        """Save response cache to file"""
+        """Save response cache to file with size management"""
         try:
+            # Evict expired entries first
+            now = datetime.now()
+            self.response_cache = {
+                k: v for k, v in self.response_cache.items()
+                if datetime.fromisoformat(v['timestamp']) > now - timedelta(seconds=CACHE_TTL)
+            }
+            
+            # If cache is too large, remove oldest entries
+            MAX_CACHE_ENTRIES = 500
+            if len(self.response_cache) > MAX_CACHE_ENTRIES:
+                sorted_keys = sorted(
+                    self.response_cache.keys(),
+                    key=lambda k: self.response_cache[k]['timestamp']
+                )
+                entries_to_remove = len(sorted_keys) - MAX_CACHE_ENTRIES
+                for key in sorted_keys[:entries_to_remove]:
+                    del self.response_cache[key]
+            
             with open(RESPONSE_CACHE_FILE, 'w') as f:
                 json.dump(self.response_cache, f)
         except Exception as e:
@@ -147,15 +165,22 @@ class FarmerChatInterface:
         except Exception as e:
             error_str = str(e)
             
-            # Handle quota exceeded error gracefully
-            if "429" in error_str or "quota" in error_str.lower():
-                fallback = f"API quota exceeded - currently in demo mode. However, based on the latest analysis: {current_data.get('analysis', 'No data available')}. Please try again in a few minutes."
-                print(f"[QUOTA EXCEEDED] {error_str[:100]}")
+            # Handle Azure OpenAI specific errors
+            if any(code in error_str for code in ["RateLimitError", "429", "insufficient_quota", "DeploymentNotFound"]):
+                fallback = (
+                    "Azure OpenAI is temporarily unavailable. "
+                    f"Latest analysis data: {current_data.get('analysis', 'No data available')}. "
+                    "Please try again shortly."
+                )
+                print(f"[AZURE ERROR] {error_str[:100]}")
                 return fallback
             
             # Handle other errors
             print(f"[API ERROR] {error_str[:100]}")
-            return f"Sorry, I couldn't process your question right now. Error: {error_str[:100]}"
+            return (
+                "I couldn't process your question right now. "
+                f"Latest data available: {current_data.get('analysis', 'No data')}. Please try again."
+            )
     
     def save_chat_log(self, farmer_input, ai_response):
         """Save chat interaction to log file"""

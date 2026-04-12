@@ -9,6 +9,8 @@ import os
 import json
 import threading
 import time
+import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from langchain_core.messages import HumanMessage
 from langchain_openai import AzureChatOpenAI
@@ -52,6 +54,27 @@ class VideoProcessor:
         self.latest_analysis = "Ready for analysis"
         self.processing_thread = None
         
+        # Thread safety
+        self._lock = threading.Lock()
+        
+        # Setup logger with rotation
+        self._setup_logger()
+    
+    def _setup_logger(self):
+        """Setup rotating file handler for analysis logs"""
+        self.analysis_logger = logging.getLogger("analysis")
+        self.analysis_logger.setLevel(logging.INFO)
+        
+        handler = RotatingFileHandler(
+            ANALYSIS_LOG_FILE,
+            maxBytes=5 * 1024 * 1024,  # 5MB per file
+            backupCount=7,  # Keep 7 days of logs
+            encoding="utf-8"
+        )
+        formatter = logging.Formatter("%(message)s")
+        handler.setFormatter(formatter)
+        self.analysis_logger.addHandler(handler)
+        
     def analyze_frame(self, frame):
         """Analyze a single frame with Azure OpenAI"""
         if frame is None:
@@ -83,32 +106,48 @@ class VideoProcessor:
         except Exception as e:
             return f"Analysis error: {str(e)[:100]}"
     
-    def process_video_file(self, video_path, frame_interval=30):
-        """Process a video file frame by frame"""
+    def process_video_file(self, video_path, frame_interval=None):
+        """Process a video file frame by frame
+        
+        Args:
+            video_path: Path to video file
+            frame_interval: Seconds between frame analysis (default 3s from env or 3)
+        """
+        if frame_interval is None:
+            frame_interval = int(os.getenv("FRAME_ANALYSIS_INTERVAL", 3))
+        
         self.is_processing = True
         self.current_status = "processing"
-        self.frame_count = 0
-        self.latest_analysis = "Starting video analysis..."
+        
+        with self._lock:
+            self.frame_count = 0
+            self.latest_analysis = "Starting video analysis..."
         
         try:
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
                 self.current_status = "error"
-                self.latest_analysis = "Error: Could not open video file"
+                with self._lock:
+                    self.latest_analysis = "Error: Could not open video file"
                 return
             
             fps = cap.get(cv2.CAP_PROP_FPS)
-            frame_skip = max(1, int(fps * frame_interval / 1000)) if frame_interval else 1
+            # Calculate frames to skip: if 30fps and want analysis every 3 seconds, skip 90 frames
+            frame_skip = max(1, int(fps * frame_interval))
+            
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             
             while cap.isOpened() and self.is_processing:
                 ret, frame = cap.read()
                 if not ret:
                     break
                 
-                self.frame_count += 1
+                with self._lock:
+                    self.frame_count += 1
+                    current_frame = self.frame_count
                 
                 # Process every nth frame
-                if self.frame_count % frame_skip == 0:
+                if current_frame % frame_skip == 0:
                     # Resize frame for faster processing
                     resized = cv2.resize(frame, (640, 480))
                     analysis = self.analyze_frame(resized)
@@ -116,22 +155,24 @@ class VideoProcessor:
                     # Save frame
                     cv2.imwrite("current_frame.jpg", frame)
                     
-                    # Update shared data
-                    self.latest_analysis = analysis
-                    self._update_shared_data(analysis)
+                    # Update shared data with lock
+                    with self._lock:
+                        self.latest_analysis = analysis
                     
-                    # Log analysis
+                    self._update_shared_data(analysis)
                     self._log_analysis(analysis)
                     
                     time.sleep(2)  # Rate limiting
             
             cap.release()
             self.current_status = "completed"
-            self.latest_analysis = f"Video analysis completed. Processed {self.frame_count} frames."
+            with self._lock:
+                self.latest_analysis = f"Video analysis completed. Processed {self.frame_count} frames."
             
         except Exception as e:
             self.current_status = "error"
-            self.latest_analysis = f"Error: {str(e)[:100]}"
+            with self._lock:
+                self.latest_analysis = f"Error: {str(e)[:100]}"
         finally:
             self.is_processing = False
     
@@ -139,27 +180,34 @@ class VideoProcessor:
         """Process webcam stream for specified duration"""
         self.is_processing = True
         self.current_status = "processing"
-        self.frame_count = 0
-        self.latest_analysis = "Starting webcam analysis..."
+        
+        with self._lock:
+            self.frame_count = 0
+            self.latest_analysis = "Starting webcam analysis..."
         
         try:
             cap = cv2.VideoCapture(0)
             if not cap.isOpened():
                 self.current_status = "error"
-                self.latest_analysis = "Error: Could not access webcam"
+                with self._lock:
+                    self.latest_analysis = "Error: Could not access webcam"
                 return
             
             start_time = time.time()
-            frame_skip = 30  # Process every 30th frame
+            frame_interval = int(os.getenv("FRAME_ANALYSIS_INTERVAL", 3))
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30
+            frame_skip = max(1, int(fps * frame_interval))
             
             while self.is_processing and (time.time() - start_time) < duration_seconds:
                 ret, frame = cap.read()
                 if not ret:
                     break
                 
-                self.frame_count += 1
+                with self._lock:
+                    self.frame_count += 1
+                    current_frame = self.frame_count
                 
-                if self.frame_count % frame_skip == 0:
+                if current_frame % frame_skip == 0:
                     # Resize frame
                     resized = cv2.resize(frame, (640, 480))
                     analysis = self.analyze_frame(resized)
@@ -167,22 +215,24 @@ class VideoProcessor:
                     # Save frame
                     cv2.imwrite("current_frame.jpg", frame)
                     
-                    # Update shared data
-                    self.latest_analysis = analysis
-                    self._update_shared_data(analysis)
+                    # Update shared data with lock
+                    with self._lock:
+                        self.latest_analysis = analysis
                     
-                    # Log analysis
+                    self._update_shared_data(analysis)
                     self._log_analysis(analysis)
                     
                     time.sleep(2)  # Rate limiting
             
             cap.release()
             self.current_status = "completed"
-            self.latest_analysis = f"Webcam analysis completed. Processed {self.frame_count} frames."
+            with self._lock:
+                self.latest_analysis = f"Webcam analysis completed. Processed {self.frame_count} frames."
             
         except Exception as e:
             self.current_status = "error"
-            self.latest_analysis = f"Error: {str(e)[:100]}"
+            with self._lock:
+                self.latest_analysis = f"Error: {str(e)[:100]}"
         finally:
             self.is_processing = False
     
@@ -201,13 +251,26 @@ class VideoProcessor:
             print(f"Error updating shared data: {e}")
     
     def _log_analysis(self, analysis):
-        """Log analysis to file"""
+        """Log analysis to file using rotating handler"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
-            with open(ANALYSIS_LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(f"{timestamp} - FRAME {self.frame_count}: {analysis}\n")
+            with self._lock:
+                frame_num = self.frame_count
+            message = f"{timestamp} - FRAME {frame_num}: {analysis}"
+            self.analysis_logger.info(message)
         except Exception as e:
             print(f"Error logging analysis: {e}")
+    
+    def get_status(self):
+        """Get current processing status (thread-safe)"""
+        with self._lock:
+            return {
+                "is_processing": self.is_processing,
+                "status": self.current_status,
+                "frame_count": self.frame_count,
+                "latest_analysis": self.latest_analysis,
+                "timestamp": datetime.now().isoformat()
+            }
     
     def start_video_processing(self, video_path):
         """Start video processing in a background thread"""
@@ -216,7 +279,7 @@ class VideoProcessor:
         
         self.processing_thread = threading.Thread(
             target=self.process_video_file,
-            args=(video_path, 90),  # 90ms frame interval
+            args=(video_path,),  # Use default frame_interval from env
             daemon=True
         )
         self.processing_thread.start()

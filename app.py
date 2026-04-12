@@ -1,9 +1,14 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.utils import secure_filename
 from at import SMS
 from chat_interface import FarmerChatInterface
 from video_processor import video_processor
+from config import features, is_sms_enabled
+from db import (init_db, save_message, get_all_conversations, 
+                clear_conversations, delete_conversation)
 from datetime import datetime
 import logging
 import os
@@ -12,7 +17,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# File upload configuration
+# ────────────────────────────────────────────────────────────
+# Error Codes
+# ────────────────────────────────────────────────────────────
+
+ERROR_CHAT = "CHAT_ERROR"
+ERROR_SMS = "SMS_ERROR"
+ERROR_VIDEO = "VIDEO_ERROR"
+ERROR_ANALYSIS = "ANALYSIS_ERROR"
+
+# ────────────────────────────────────────────────────────────
+# Configuration
+# ────────────────────────────────────────────────────────────
+
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"mp4", "avi", "mov", "mkv"}
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
@@ -20,9 +37,25 @@ MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-app = Flask(__name__, static_folder="frontend", template_folder="frontend")
-CORS(app)  # Allow frontend dev server during development
+# ────────────────────────────────────────────────────────────
+# Flask and Middleware
+# ────────────────────────────────────────────────────────────
 
+app = Flask(__name__, static_folder="frontend", template_folder="frontend")
+
+# CORS with restricted origins
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5000").split(",")
+CORS(app, origins=[o.strip() for o in allowed_origins])
+
+# Rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -31,13 +64,26 @@ logger = logging.getLogger(__name__)
 def log_request():
     logger.info(f"{request.method} {request.path}")
 
+# ────────────────────────────────────────────────────────────
+# Service Initialization
+# ────────────────────────────────────────────────────────────
+
+# Initialize database
+init_db()
+
+# SMS is lazy-initialized
 sms_sender = SMS()
+
+# AI chat interface
 ai_farmer = FarmerChatInterface()
 
-conversation_history = {}
-
+# File paths
 SHARED_DATA_FILE = "cow_analysis_data.json"
 ANALYSIS_LOG_FILE = "analysis_log.txt"
+
+# Log cache with TTL
+_log_cache = {"entries": [], "mtime": 0, "total": 0, "timestamp": 0}
+LOG_CACHE_TTL = 30  # 30 seconds
 
 # ─── Serve the React/HTML frontend ───────────────────────────────────────────
 
@@ -65,6 +111,7 @@ def health():
 # ─── API: AI Test / Chat ──────────────────────────────────────────────────────
 
 @app.route("/test", methods=["POST"])
+@limiter.limit("20 per minute")
 def test_ai():
     """
     Chat with the AI farmer assistant.
@@ -79,14 +126,6 @@ def test_ai():
 
         response = ai_farmer.chat_with_farmer(message)
         
-        # Check if response indicates quota issue
-        if "quota exceeded" in response.lower() or "429" in response:
-            return jsonify({
-                "input": message, 
-                "response": response, 
-                "status": "quota_limited"
-            }), 200
-        
         return jsonify({
             "input": message, 
             "response": response, 
@@ -96,8 +135,8 @@ def test_ai():
     except Exception as e:
         logger.error(f"/test error: {e}")
         return jsonify({
-            "error": "Failed to process message",
-            "details": str(e)[:100],
+            "error": "An internal error occurred",
+            "code": ERROR_CHAT,
             "status": "error"
         }), 500
 
@@ -105,12 +144,19 @@ def test_ai():
 # ─── API: Manual SMS Send ─────────────────────────────────────────────────────
 
 @app.route("/send", methods=["POST"])
+@limiter.limit("10 per minute")
 def send_sms():
     """
     Send an SMS (with optional AI response generation).
     Body: { "message": "...", "recipients": "+254..." | ["+254...", ...], "use_ai": false }
-    Returns: { "status": "success", "result": {...}, "response": "...", "recipients": [...] }
+    Returns: { "status": "success", "recipients": [...] }
     """
+    if not is_sms_enabled():
+        return jsonify({
+            "error": "SMS not configured",
+            "code": ERROR_SMS
+        }), 503
+    
     try:
         data = request.get_json() if request.is_json else request.form.to_dict()
         message = data.get("message", "").strip()
@@ -133,19 +179,29 @@ def send_sms():
             outgoing = message
 
         result = sms_sender.send(recipients_list, outgoing)
+        
+        if not result.get("success"):
+            return jsonify({
+                "error": result.get("error", "Failed to send SMS"),
+                "code": ERROR_SMS
+            }), 500
+        
+        # Store in database
+        for phone in recipients_list:
+            save_message(phone, "sent", outgoing)
+        
         return jsonify({
             "status": "success",
-            "result": result,
-            "response": outgoing,
             "recipients": recipients_list,
         }), 200
 
     except Exception as e:
         logger.error(f"/send error: {e}")
-        return jsonify({"error": "Failed to send SMS", "details": str(e)}), 500
+        return jsonify({
+            "error": "An internal error occurred",
+            "code": ERROR_SMS
+        }), 500
 
-
-# ─── API: Incoming SMS Webhook ────────────────────────────────────────────────
 
 @app.route("/sms/receive", methods=["POST"])
 def receive_sms():
@@ -154,42 +210,48 @@ def receive_sms():
     AT posts: from, text, id, to, date
     Auto-replies with AI-generated response.
     """
+    if not is_sms_enabled():
+        return jsonify({"error": "SMS not configured"}), 503
+    
     try:
         data = request.get_json() if request.is_json else request.form.to_dict()
 
+        # Verify the request is from Africa's Talking
+        at_username = data.get("to", "")
+        expected = os.getenv("AFRICAS_TALKING_USERNAME", "sandbox")
+        
+        if at_username and at_username != expected:
+            logger.warning(f"Rejected SMS webhook from unexpected sender: {at_username}")
+            return jsonify({"error": "Unauthorized"}), 401
+
         phone_number = data.get("from", "")
         message_text = data.get("text", "")
-        message_id   = data.get("id", "")
+        message_id = data.get("id", "")
 
         logger.info(f"Incoming SMS from {phone_number}: {message_text}")
 
-        # Normalise Kenyan numbers
+        # Normalize Kenyan numbers
         if phone_number and not phone_number.startswith("+"):
             phone_number = "+254" + phone_number.lstrip("0")
 
-        if phone_number not in conversation_history:
-            conversation_history[phone_number] = []
+        # Store in database
+        save_message(phone_number, "received", message_text)
 
-        conversation_history[phone_number].append({
-            "type": "received",
-            "message": message_text,
-            "timestamp": datetime.now().isoformat(),
-        })
-
+        # Generate AI response
         ai_response = ai_farmer.chat_with_farmer(message_text)
         _send_reply(phone_number, ai_response)
-
-        conversation_history[phone_number].append({
-            "type": "sent",
-            "message": ai_response,
-            "timestamp": datetime.now().isoformat(),
-        })
+        
+        # Store AI response in database
+        save_message(phone_number, "sent", ai_response)
 
         return jsonify({"status": "success", "message": "SMS processed"}), 200
 
     except Exception as e:
         logger.error(f"/sms/receive error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            "error": "An internal error occurred",
+            "code": ERROR_SMS
+        }), 500
 
 
 # ─── API: SMS Delivery Reports ────────────────────────────────────────────────
@@ -215,23 +277,44 @@ def get_conversations():
     GET /conversations?phone=+254…  → single thread
     """
     phone_number = request.args.get("phone_number") or request.args.get("phone")
-    if phone_number:
+    
+    try:
+        if phone_number:
+            from db import get_conversation
+            messages = get_conversation(phone_number)
+            return jsonify({
+                "phone_number": phone_number,
+                "messages": messages,
+            })
+        else:
+            all_convs = get_all_conversations()
+            return jsonify({
+                "total_conversations": len(all_convs),
+                "conversations": all_convs,
+            })
+    except Exception as e:
+        logger.error(f"/conversations error: {e}")
         return jsonify({
-            "phone_number": phone_number,
-            "conversation": conversation_history.get(phone_number, []),
-        })
-    return jsonify({
-        "total_conversations": len(conversation_history),
-        "conversations": conversation_history,
-    })
+            "error": "An internal error occurred",
+            "code": ERROR_SMS
+        }), 500
 
 
 @app.route("/conversations/clear", methods=["POST"])
-def clear_conversations():
-    """Wipe all in-memory conversation history."""
-    global conversation_history
-    conversation_history = {}
-    return jsonify({"status": "success", "message": "Conversation history cleared"})
+def clear_conversations_route():
+    """Wipe all conversation history from database."""
+    if not is_sms_enabled():
+        return jsonify({"error": "SMS not configured"}), 503
+    
+    try:
+        clear_conversations()
+        return jsonify({"status": "success", "message": "Conversation history cleared"})
+    except Exception as e:
+        logger.error(f"/conversations/clear error: {e}")
+        return jsonify({
+            "error": "An internal error occurred",
+            "code": ERROR_SMS
+        }), 500
 
 
 # ─── API: Live Analysis Status ────────────────────────────────────────────────
@@ -260,19 +343,38 @@ def analysis_status():
 @app.route("/analysis/log", methods=["GET"])
 def analysis_log():
     """
-    Returns last N lines from analysis_log.txt.
+    Returns last N lines from analysis_log.txt with caching.
     Query param: ?lines=50 (default 30)
+    Cache TTL: 30 seconds
     """
+    global _log_cache
+    
     try:
         n = int(request.args.get("lines", 30))
+        
+        # Check cache validity
+        now = datetime.now().timestamp()
+        if _log_cache["timestamp"] > 0 and (now - _log_cache["timestamp"]) < LOG_CACHE_TTL:
+            # Return cached entries
+            entries = _log_cache["entries"][-n:] if _log_cache["entries"] else []
+            return jsonify({"entries": entries, "total": _log_cache["total"]}), 200
+        
         if not os.path.exists(ANALYSIS_LOG_FILE):
             return jsonify({"entries": [], "total": 0}), 200
 
+        # Check if file has been modified
+        mtime = os.path.getmtime(ANALYSIS_LOG_FILE)
+        if mtime <= _log_cache["mtime"] and _log_cache["timestamp"] > 0:
+            # Use cached data
+            entries = _log_cache["entries"][-n:] if _log_cache["entries"] else []
+            return jsonify({"entries": entries, "total": _log_cache["total"]}), 200
+
+        # Read and parse file
         with open(ANALYSIS_LOG_FILE, "r", encoding="utf-8") as f:
             raw = [l.strip() for l in f.readlines() if l.strip()]
 
         entries = []
-        for line in raw[-n:]:
+        for line in raw:
             # Format: "2025-07-31 16:27:20 - FRAME 90: Four cows are eating hay."
             try:
                 ts_part, rest = line.split(" - FRAME ", 1)
@@ -291,10 +393,23 @@ def analysis_log():
                     "is_error": False,
                 })
 
-        return jsonify({"entries": entries, "total": len(raw)}), 200
+        # Update cache
+        _log_cache = {
+            "entries": entries,
+            "mtime": mtime,
+            "total": len(raw),
+            "timestamp": now
+        }
+
+        # Return requested slice
+        return jsonify({"entries": entries[-n:], "total": len(raw)}), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"/analysis/log error: {e}")
+        return jsonify({
+            "error": "An internal error occurred",
+            "code": ERROR_ANALYSIS
+        }), 500
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -369,6 +484,7 @@ def upload_video():
 
 
 @app.route("/video/process", methods=["POST"])
+@limiter.limit("5 per minute")
 def process_video():
     """Start video processing with AI analysis"""
     try:
@@ -421,7 +537,10 @@ def process_video():
         
     except Exception as e:
         logger.error(f"/video/process error: {e}")
-        return jsonify({"error": str(e)[:100]}), 500
+        return jsonify({
+            "error": "An internal error occurred",
+            "code": ERROR_VIDEO
+        }), 500
 
 
 @app.route("/video/status", methods=["GET"])
